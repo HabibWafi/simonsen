@@ -104,17 +104,7 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
     const idsls = String(p.idsls ?? '')
     const kdsls = String(p.kdsls ?? '')
     const nmsls = String(p.nmsls ?? '')
-    const nmKetua = p.nm_ketua ? String(p.nm_ketua) : ''
-    const luasHa = p.luas ? (Number(p.luas) / 10000).toFixed(2) : '' // m² → ha
     const d = byKey.get(idsls) || byKey.get(kdsls)
-
-    const footer = (nmKetua || luasHa)
-      ? `<div style="font-size:10px;color:#8C7B6B;margin-top:8px;border-top:1px dashed #ddd;padding-top:6px">
-          ${nmKetua ? `Ketua: <b>${nmKetua}</b>` : ''}
-          ${nmKetua && luasHa ? ' · ' : ''}
-          ${luasHa ? `Luas: <b>${luasHa} ha</b>` : ''}
-        </div>`
-      : ''
 
     const html = d
       ? `<div style="font-family:Inter,sans-serif;min-width:220px">
@@ -126,12 +116,10 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
             breakdown: d.breakdown ?? undefined,
             skalaFilter: skala,
           })}
-          ${footer}
         </div>`
       : `<div style="font-family:Inter,sans-serif;min-width:180px">
           <strong style="font-size:13px;color:#1A1A1A">SLS ${nmsls || kdsls}</strong><br/>
           <span style="font-size:11px;color:#8C7B6B">Belum ada data usaha</span>
-          ${footer}
         </div>`
     ;(layer as any).bindTooltip(html, { permanent: false, sticky: true })
   }
