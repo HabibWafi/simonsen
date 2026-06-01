@@ -5,7 +5,9 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { mockProgress, mockStats } from '@/lib/mockData'
 import WaveLoop from '@/components/decor/WaveLoop'
+import KecamatanTooltip from '@/components/KecamatanTooltip'
 import { withBase } from '@/lib/basePath'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 const MapKecamatan = dynamic(() => import('@/components/MapKecamatan'), {
   ssr: false,
@@ -23,6 +25,12 @@ const MapSls = dynamic(() => import('@/components/MapSls'), {
 type Skala = '' | 'UMK' | 'UM' | 'UB'
 type SortKey = 'kecamatan' | 'target_usaha' | 'realisasi' | 'persentase'
 
+const mobSelectStyle: React.CSSProperties = {
+  width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #EDE3D8',
+  background: 'white', fontSize: 13, fontWeight: 700, color: '#3D3D3D',
+  cursor: 'pointer', outline: 'none',
+}
+
 const SKALA_OPTS: { v: Skala; label: string; color: string }[] = [
   { v: '',    label: 'Semua Skala', color: '#6B6B6B' },
   { v: 'UMK', label: 'Mikro & Kecil (UMK)', color: '#00A651' },
@@ -37,6 +45,35 @@ export default function ProgressPage() {
   const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null)
   const [drilledKec, setDrilledKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
   const [drilledDesa, setDrilledDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
+  const isMobile = useIsMobile()
+
+  // Mobile filter state
+  const [mobKec, setMobKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
+  const [mobDesa, setMobDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
+  const [mobSls, setMobSls] = useState<{ idsls: string; nmsls: string } | null>(null)
+  const [desaOptions, setDesaOptions] = useState<any[]>([])
+  const [slsOptions, setSlsOptions] = useState<any[]>([])
+
+  useEffect(() => {
+    const kec = isMobile ? mobKec : drilledKec
+    if (!kec) { setDesaOptions([]); return }
+    fetch(`/api/progress/desa?kec=${encodeURIComponent(kec.kdkec)}${skala ? `&skala=${skala}` : ''}`)
+      .then(r => r.json()).then(j => setDesaOptions((j.data ?? []).map((d: any) => ({
+        iddesa: `${d.kdkec}${d.kddesa}`,
+        nmdesa: d.nmdesa,
+        target: Number(d.target_usaha ?? 0),
+        realisasi: Number(d.realisasi ?? 0),
+        persentase: Number(d.persentase ?? 0),
+        breakdown: d.breakdown ?? null,
+      })))).catch(() => setDesaOptions([]))
+  }, [isMobile ? mobKec?.kdkec : drilledKec?.kdkec, skala])
+
+  useEffect(() => {
+    const desa = isMobile ? mobDesa : drilledDesa
+    if (!desa) { setSlsOptions([]); return }
+    fetch(`/api/progress/sls?desa=${encodeURIComponent(desa.iddesa)}${skala ? `&skala=${skala}` : ''}`)
+      .then(r => r.json()).then(j => setSlsOptions(j.data ?? [])).catch(() => setSlsOptions([]))
+  }, [isMobile ? mobDesa?.iddesa : drilledDesa?.iddesa, skala])
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('persentase')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -139,6 +176,102 @@ export default function ProgressPage() {
             )}
           </div>
 
+          {/* Mobile-only: dropdown filter wilayah + info panel (klik peta tidak drill di mobile) */}
+          {isMobile && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16, padding: 14, background: 'white', borderRadius: 12, border: '1px solid #EDE3D8' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#8C7B6B', textTransform: 'uppercase', letterSpacing: .5 }}>Filter Wilayah</div>
+              <select
+                value={mobKec?.kdkec ?? ''}
+                onChange={e => {
+                  const v = e.target.value
+                  setMobDesa(null); setMobSls(null)
+                  if (!v) { setMobKec(null); return }
+                  const found = progress.find((k: any) => String(k.kdkec ?? '') === v)
+                  if (found) setMobKec({ kdkec: v, nmkec: found.nmkec ?? found.kecamatan })
+                }}
+                style={mobSelectStyle}
+              >
+                <option value="">— pilih kecamatan —</option>
+                {(progress as any[]).filter((k: any) => k.kdkec).map((k: any) => (
+                  <option key={k.kdkec} value={k.kdkec}>{k.nmkec ?? k.kecamatan}</option>
+                ))}
+              </select>
+
+              {mobKec && desaOptions.length > 0 && (
+                <select
+                  value={mobDesa?.iddesa ?? ''}
+                  onChange={e => {
+                    const v = e.target.value
+                    setMobSls(null)
+                    if (!v) { setMobDesa(null); return }
+                    const opt = desaOptions.find((o: any) => o.iddesa === v)
+                    if (opt) setMobDesa({ iddesa: opt.iddesa, nmdesa: opt.nmdesa })
+                  }}
+                  style={mobSelectStyle}
+                >
+                  <option value="">— pilih desa —</option>
+                  {desaOptions.map((o: any) => (
+                    <option key={o.iddesa} value={o.iddesa}>{o.nmdesa}</option>
+                  ))}
+                </select>
+              )}
+
+              {mobDesa && slsOptions.length > 0 && (
+                <select
+                  value={mobSls?.idsls ?? ''}
+                  onChange={e => {
+                    const v = e.target.value
+                    if (!v) { setMobSls(null); return }
+                    const opt = slsOptions.find((o: any) => o.idsls === v)
+                    if (opt) setMobSls({ idsls: opt.idsls, nmsls: opt.nmsls })
+                  }}
+                  style={mobSelectStyle}
+                >
+                  <option value="">— pilih SLS —</option>
+                  {slsOptions.map((o: any) => (
+                    <option key={o.idsls} value={o.idsls}>SLS {o.nmsls || o.idsls.slice(-4)}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Info panel mobile — info wilayah terdalam yang dipilih */}
+              {(() => {
+                let info: any = null
+                let label = ''
+                if (mobSls) {
+                  const s = slsOptions.find((o: any) => o.idsls === mobSls.idsls)
+                  if (s) { info = { target: s.target_usaha, realisasi: s.realisasi, persentase: s.persentase, breakdown: s.breakdown }; label = `SLS ${s.nmsls || mobSls.idsls.slice(-4)}` }
+                } else if (mobDesa) {
+                  const d = desaOptions.find((o: any) => o.iddesa === mobDesa.iddesa)
+                  if (d) { info = { target: d.target, realisasi: d.realisasi, persentase: d.persentase, breakdown: d.breakdown }; label = `Desa ${d.nmdesa}` }
+                } else if (mobKec) {
+                  const k: any = progress.find((p: any) => String(p.kdkec ?? '') === mobKec.kdkec)
+                  if (k) { info = { target: k.target_usaha, realisasi: k.realisasi, persentase: k.persentase, breakdown: k.breakdown }; label = k.nmkec ?? k.kecamatan }
+                }
+                if (!info) return (
+                  <p style={{ fontSize: 12, color: '#8C7B6B', fontStyle: 'italic', margin: 0 }}>
+                    Pilih kecamatan/desa/SLS di atas untuk melihat info pencacahan.
+                  </p>
+                )
+                return (
+                  <div style={{ paddingTop: 8, borderTop: '1px dashed #EDE3D8' }}>
+                    <KecamatanTooltip
+                      nama={label}
+                      target={info.target}
+                      realisasi={info.realisasi}
+                      persentase={info.persentase}
+                      breakdown={info.breakdown ?? undefined}
+                      skalaFilter={skala}
+                    />
+                    <div style={{ marginTop: 10, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${info.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
           {/* Map + Ranking */}
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 32, marginBottom: 40 }} className="map-layout">
             <div>
@@ -164,13 +297,19 @@ export default function ProgressPage() {
                     nmkec={drilledKec.nmkec}
                     skala={skala}
                     onBack={() => { setDrilledKec(null); setDrilledDesa(null) }}
-                    onDesaClick={(iddesa, nmdesa) => setDrilledDesa({ iddesa, nmdesa })}
+                    onDesaClick={(iddesa, nmdesa) => {
+                      setMobDesa({ iddesa, nmdesa }); setMobSls(null)
+                      if (!isMobile) setDrilledDesa({ iddesa, nmdesa })
+                    }}
                   />
                 ) : geoJson ? (
                   <MapKecamatan
                     data={progress}
                     geoJson={geoJson}
-                    onKecClick={(kdkec, nmkec) => setDrilledKec({ kdkec, nmkec })}
+                    onKecClick={(kdkec, nmkec) => {
+                      setMobKec({ kdkec, nmkec }); setMobDesa(null); setMobSls(null)
+                      if (!isMobile) setDrilledKec({ kdkec, nmkec })
+                    }}
                     skalaFilter={skala}
                   />
                 ) : <MapLoader />}

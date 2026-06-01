@@ -1,23 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import pool from '@/lib/db'
 
+export const runtime = 'nodejs'
+
 /**
- * GET /api/progress/sls?desa=<10-digit composed iddesa>&skala=<UMK|UM|UB>
- * Aggregate per kdsls dari tabel `usaha` untuk satu desa tertentu.
- * Saat skala kosong → sertakan breakdown 3-skala per SLS.
+ * GET /api/progress/sls?desa=<iddesa 10-digit>[&skala=UMK|UM|UB][&geojson=1]
  *
- * Catatan: `usaha.kdsls` umumnya tersimpan sebagai 4-digit lokal (mis. "0004").
- * Kita pakai filter `CONCAT(kdprov,kdkab,kdkec,kddesa) = ?` agar tahan format
- * apa pun di kolom kdsls.
+ * Performance:
+ *  - GeoJSON SLS (4 MB) di-load SEKALI di module scope lalu di-index lazy
+ *    ke Map<iddesa, Feature[]>. Request berikutnya hanya lookup map.
+ *  - Sertakan `geojson` dalam response yang sama (1 round-trip dari client).
+ *  - PII / field tidak dipakai dibuang (nm_ketua, luas, fid, idsubsls, dll).
+ *  - Cache header 5 menit browser, 10 menit edge.
+ *
+ * Output: { data: SlsRow[], geojson?: FeatureCollection }
  */
+
+const ALLOWED_PROPS = new Set([
+  'idsls', 'kdsls', 'nmsls',
+  'kdprov', 'kdkab', 'kdkec', 'kddesa',
+  'nmprov', 'nmkab', 'nmkec', 'nmdesa',
+])
+
+let _index: Map<string, any[]> | null = null
+
+function loadIndex(): Map<string, any[]> {
+  if (_index) return _index
+  const file = resolve(process.cwd(), 'public/geo/musirawas_sls-subsls.geojson')
+  const raw = readFileSync(file, 'utf-8')
+  const geo = JSON.parse(raw) as { features: any[] }
+  const idx = new Map<string, any[]>()
+  for (const f of geo.features) {
+    const p = f.properties ?? {}
+    const key = `${p.kdprov ?? ''}${p.kdkab ?? ''}${p.kdkec ?? ''}${p.kddesa ?? ''}`
+    if (!idx.has(key)) idx.set(key, [])
+    // Strip property: hanya simpan yang dipakai UI
+    const cleanProps: Record<string, any> = {}
+    for (const k of Object.keys(p)) {
+      if (ALLOWED_PROPS.has(k)) cleanProps[k] = p[k]
+    }
+    idx.get(key)!.push({ type: f.type, properties: cleanProps, geometry: f.geometry })
+  }
+  _index = idx
+  return idx
+}
+
+function buildGeoJson(iddesa: string) {
+  const idx = loadIndex()
+  const features = idx.get(iddesa) ?? []
+  return { type: 'FeatureCollection' as const, features }
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
-  const iddesa = url.searchParams.get('desa')
+  const iddesa = url.searchParams.get('desa') ?? ''
   const skala = url.searchParams.get('skala')
+  const includeGeo = url.searchParams.get('geojson') === '1'
   const skalaFilter = skala && ['UMK', 'UM', 'UB'].includes(skala) ? skala : null
 
-  if (!iddesa) {
-    return NextResponse.json({ error: 'Param `desa` (iddesa 10-digit) wajib' }, { status: 400 })
+  // Validasi: iddesa = 10 digit numeric
+  if (!/^\d{10}$/.test(iddesa)) {
+    return NextResponse.json({ error: 'Param `desa` harus 10 digit numeric (iddesa)' }, { status: 400 })
   }
 
   try {
@@ -56,7 +101,7 @@ export async function GET(req: NextRequest) {
       const ubT  = Number(r.ub_target),  ubD  = Number(r.ub_done)
       const idsls = `${r.kdprov}${r.kdkab}${r.kdkec}${r.kddesa}${r.kdsls ?? ''}`
       return {
-        idsls,                               // 14-digit komposit untuk match geojson
+        idsls,
         kdsls: r.kdsls ?? '',
         nmsls: r.nmsls ?? '',
         target_usaha: target,
@@ -69,7 +114,15 @@ export async function GET(req: NextRequest) {
         },
       }
     })
-    return NextResponse.json({ data })
+
+    const body: any = { data }
+    if (includeGeo) body.geojson = buildGeoJson(iddesa)
+
+    return NextResponse.json(body, {
+      headers: {
+        'Cache-Control': 'public, max-age=300, s-maxage=600, stale-while-revalidate=60',
+      },
+    })
   } catch (e: any) {
     return NextResponse.json({ data: [], error: e?.message ?? 'DB error' }, { status: 500 })
   }

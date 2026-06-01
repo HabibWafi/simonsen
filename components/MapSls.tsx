@@ -6,7 +6,6 @@ import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import type { Feature, FeatureCollection } from 'geojson'
 import type { Layer } from 'leaflet'
-import { withBase } from '@/lib/basePath'
 import { buildKecamatanTooltipHtml } from './KecamatanTooltip'
 import type { ProgressBreakdown } from '@/types'
 
@@ -37,11 +36,6 @@ function pctToColor(pct: number): string {
   return '#FFF0DC'
 }
 
-/** Compose 10-digit iddesa key dari geojson props (yang punya kdprov/kdkab/kdkec/kddesa terpisah). */
-function composedIddesa(props: any): string {
-  return `${props?.kdprov ?? ''}${props?.kdkab ?? ''}${props?.kdkec ?? ''}${props?.kddesa ?? ''}`
-}
-
 export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) {
   const [geoJson, setGeoJson] = useState<FeatureCollection | null>(null)
   const [slsData, setSlsData] = useState<SlsRow[]>([])
@@ -49,21 +43,18 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
   const [bounds, setBounds] = useState<L.LatLngBoundsExpression | null>(null)
 
   useEffect(() => {
+    let cancel = false
     setLoading(true)
-    Promise.all([
-      fetch(withBase('/geo/musirawas_sls-subsls.geojson')).then(r => r.json()),
-      fetch(`/api/progress/sls?desa=${encodeURIComponent(iddesa)}${skala ? `&skala=${skala}` : ''}`).then(r => r.json()),
-    ])
-      .then(([geo, agg]) => {
-        const filtered = (geo as FeatureCollection).features.filter(f =>
-          composedIddesa(f.properties) === iddesa,
-        )
-        const fc: FeatureCollection = { type: 'FeatureCollection', features: filtered }
+    // 1 fetch — server kembalikan geojson sudah ter-filter + aggregate
+    fetch(`/api/progress/sls?desa=${encodeURIComponent(iddesa)}${skala ? `&skala=${skala}` : ''}&geojson=1`)
+      .then(r => r.json())
+      .then(json => {
+        if (cancel) return
+        const fc: FeatureCollection = json.geojson ?? { type: 'FeatureCollection', features: [] }
         setGeoJson(fc)
-        setSlsData(agg.data ?? [])
+        setSlsData(json.data ?? [])
 
-        // Auto-fit bounds
-        if (filtered.length > 0) {
+        if (fc.features.length > 0) {
           try {
             const layer = L.geoJSON(fc as any)
             const b = layer.getBounds()
@@ -71,7 +62,9 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
           } catch {}
         }
       })
-      .finally(() => setLoading(false))
+      .catch(() => { if (!cancel) setGeoJson({ type: 'FeatureCollection', features: [] }) })
+      .finally(() => { if (!cancel) setLoading(false) })
+    return () => { cancel = true }
   }, [iddesa, skala])
 
   // Map dari idsls (14-digit) → SlsRow. Fallback: 4-digit kdsls match.
