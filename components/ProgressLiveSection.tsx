@@ -7,7 +7,6 @@ import { motion } from 'framer-motion'
 import DotsPattern from '@/components/decor/DotsPattern'
 import KecamatanTooltip from '@/components/KecamatanTooltip'
 import { withBase } from '@/lib/basePath'
-import { useIsMobile } from '@/hooks/useIsMobile'
 import type { mockProgress, mockStats } from '@/lib/mockData'
 import type { ProgressBreakdown, SkalaUsaha } from '@/types'
 
@@ -25,6 +24,12 @@ const MapDesa = dynamic(() => import('@/components/MapDesa'), { ssr: false, load
 const MapSls  = dynamic(() => import('@/components/MapSls'),  { ssr: false, loading: MapLoader })
 
 const EASE = [0.22, 1, 0.36, 1] as const
+
+const dropdownStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #EDE3D8',
+  background: 'white', fontSize: 12, fontWeight: 700, color: '#3D3D3D',
+  cursor: 'pointer', outline: 'none', marginBottom: 12,
+}
 
 type SkalaFilter = '' | SkalaUsaha
 type LiveRow = (typeof mockProgress)[number] & { breakdown?: ProgressBreakdown | null }
@@ -126,22 +131,17 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [drillKec, setDrillKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
   const [drillDesa, setDrillDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
-  const isMobile = useIsMobile()
-
-  // Mobile filter state — info wilayah terpilih (untuk panel detail mobile)
-  const [mobKec, setMobKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
-  const [mobDesa, setMobDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
-  const [mobSls, setMobSls] = useState<{ idsls: string; nmsls: string } | null>(null)
+  // Info SLS terpilih lewat dropdown (peta tetap di level SLS, dropdown update info panel)
+  const [selectedSls, setSelectedSls] = useState<{ idsls: string; nmsls: string } | null>(null)
 
   // Dropdown data: desa list per kec (lazy fetch), SLS list per desa (lazy fetch)
   const [desaOptions, setDesaOptions] = useState<Array<{ iddesa: string; nmdesa: string; target: number; realisasi: number; persentase: number; breakdown?: ProgressBreakdown | null }>>([])
   const [slsOptions, setSlsOptions] = useState<Array<{ idsls: string; nmsls: string; target_usaha: number; realisasi: number; persentase: number; breakdown?: ProgressBreakdown | null }>>([])
 
-  // Fetch desa options saat kec dipilih (di mobile via dropdown / klik peta).
+  // Fetch desa options saat kec dipilih (dropdown).
   useEffect(() => {
-    const kec = isMobile ? mobKec : drillKec
-    if (!kec) { setDesaOptions([]); return }
-    fetch(`/api/progress/desa?kec=${encodeURIComponent(kec.kdkec)}${skalaFilter ? `&skala=${skalaFilter}` : ''}`)
+    if (!drillKec) { setDesaOptions([]); return }
+    fetch(`/api/progress/desa?kec=${encodeURIComponent(drillKec.kdkec)}${skalaFilter ? `&skala=${skalaFilter}` : ''}`)
       .then(r => r.json())
       .then(j => {
         const list = (j.data ?? []).map((d: any) => ({
@@ -155,17 +155,16 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
         setDesaOptions(list)
       })
       .catch(() => setDesaOptions([]))
-  }, [isMobile ? mobKec?.kdkec : drillKec?.kdkec, skalaFilter])
+  }, [drillKec?.kdkec, skalaFilter])
 
-  // Fetch SLS options saat desa dipilih.
+  // Fetch SLS options saat desa dipilih (dropdown).
   useEffect(() => {
-    const desa = isMobile ? mobDesa : drillDesa
-    if (!desa) { setSlsOptions([]); return }
-    fetch(`/api/progress/sls?desa=${encodeURIComponent(desa.iddesa)}${skalaFilter ? `&skala=${skalaFilter}` : ''}`)
+    if (!drillDesa) { setSlsOptions([]); return }
+    fetch(`/api/progress/sls?desa=${encodeURIComponent(drillDesa.iddesa)}${skalaFilter ? `&skala=${skalaFilter}` : ''}`)
       .then(r => r.json())
       .then(j => setSlsOptions(j.data ?? []))
       .catch(() => setSlsOptions([]))
-  }, [isMobile ? mobDesa?.iddesa : drillDesa?.iddesa, skalaFilter])
+  }, [drillDesa?.iddesa, skalaFilter])
 
   // Load GeoJSON kecamatan sekali (sama dengan halaman /se/2026/progress).
   useEffect(() => {
@@ -474,11 +473,8 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
                 kdkec={drillKec.kdkec}
                 nmkec={drillKec.nmkec}
                 skala={skalaFilter}
-                onBack={() => { setDrillKec(null); setDrillDesa(null) }}
-                onDesaClick={(iddesa, nmdesa) => {
-                  setMobDesa({ iddesa, nmdesa }); setMobSls(null)
-                  if (!isMobile) setDrillDesa({ iddesa, nmdesa })
-                }}
+                onBack={() => { setDrillKec(null); setDrillDesa(null); setSelectedSls(null) }}
+                /* Beranda: tanpa klik-drill. Navigasi level via dropdown. */
               />
             ) : (
               <MapKecamatan
@@ -487,6 +483,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
                 skalaFilter={skalaFilter}
                 activeKec={selected ? String((selected as any).kdkec ?? '') : null}
                 onKecClick={(kdkec, nmkec) => {
+                  // Klik kecamatan di peta = update info panel saja (TIDAK drill).
                   const found = progress.find(k => String((k as any).kdkec ?? '') === kdkec || (k.kecamatan ?? '').toUpperCase() === nmkec.toUpperCase())
                   setSelectedKey(found ? rowKey(found) : kdkec)
                 }}
@@ -506,92 +503,70 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
             display: 'flex', flexDirection: 'column',
             marginTop: 66,
           }}>
-            {/* Filter wilayah — desktop: dropdown kec drill ke desa.
-                Mobile: dropdown kec + desa + SLS sebagai navigator (no drill peta). */}
+            {/* Filter wilayah — dropdown nav konsisten desktop & mobile.
+                Pilih dropdown = drill peta. Klik feature peta tidak drill. */}
             <label style={{ fontSize: 10, fontWeight: 700, color: '#8C7B6B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, display: 'block' }}>
               Filter Kecamatan
             </label>
             <select
-              value={(isMobile ? mobKec?.kdkec : drillKec?.kdkec) ?? ''}
+              value={drillKec?.kdkec ?? ''}
               onChange={e => {
                 const v = e.target.value
-                if (!v) {
-                  setMobKec(null); setMobDesa(null); setMobSls(null)
-                  if (!isMobile) { setDrillKec(null); setDrillDesa(null) }
-                  return
-                }
+                setDrillDesa(null); setSelectedSls(null)
+                if (!v) { setDrillKec(null); return }
                 const opt = kecOptions.find(o => o.kdkec === v)
                 if (!opt) return
-                setMobKec(opt); setMobDesa(null); setMobSls(null)
-                if (isMobile) {
-                  // mobile: hanya update info, peta tetap kabupaten
-                  setSelectedKey(progress.find(k => String((k as any).kdkec ?? '') === v) ? v : selectedKey)
-                } else {
-                  setDrillKec(opt); setDrillDesa(null)
-                  setSelectedKey(progress.find(k => String((k as any).kdkec ?? '') === v) ? v : selectedKey)
-                }
+                setDrillKec(opt)
+                setSelectedKey(progress.find(k => String((k as any).kdkec ?? '') === v) ? v : selectedKey)
               }}
-              style={{
-                width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #EDE3D8',
-                background: 'white', fontSize: 12, fontWeight: 700, color: '#3D3D3D',
-                cursor: 'pointer', outline: 'none', marginBottom: 12,
-              }}
+              style={dropdownStyle}
             >
               <option value="">🗺️ Semua Kecamatan (peta kab.)</option>
               {kecOptions.map(o => (
-                <option key={o.kdkec} value={o.kdkec}>{o.nmkec}{isMobile ? '' : ' — per desa'}</option>
+                <option key={o.kdkec} value={o.kdkec}>{o.nmkec} — lihat per desa</option>
               ))}
             </select>
 
-            {/* Mobile-only: dropdown Desa + SLS */}
-            {isMobile && mobKec && desaOptions.length > 0 && (
+            {drillKec && desaOptions.length > 0 && (
               <>
                 <label style={{ fontSize: 10, fontWeight: 700, color: '#8C7B6B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, display: 'block' }}>
                   Filter Desa
                 </label>
                 <select
-                  value={mobDesa?.iddesa ?? ''}
+                  value={drillDesa?.iddesa ?? ''}
                   onChange={e => {
                     const v = e.target.value
-                    setMobSls(null)
-                    if (!v) { setMobDesa(null); return }
+                    setSelectedSls(null)
+                    if (!v) { setDrillDesa(null); return }
                     const opt = desaOptions.find(o => o.iddesa === v)
-                    if (opt) setMobDesa({ iddesa: opt.iddesa, nmdesa: opt.nmdesa })
+                    if (opt) setDrillDesa({ iddesa: opt.iddesa, nmdesa: opt.nmdesa })
                   }}
-                  style={{
-                    width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #EDE3D8',
-                    background: 'white', fontSize: 12, fontWeight: 700, color: '#3D3D3D',
-                    cursor: 'pointer', outline: 'none', marginBottom: 12,
-                  }}
+                  style={dropdownStyle}
                 >
-                  <option value="">— pilih desa —</option>
+                  <option value="">— semua desa (peta kec.) —</option>
                   {desaOptions.map(o => (
-                    <option key={o.iddesa} value={o.iddesa}>{o.nmdesa}</option>
+                    <option key={o.iddesa} value={o.iddesa}>{o.nmdesa} — lihat per SLS</option>
                   ))}
                 </select>
               </>
             )}
 
-            {isMobile && mobDesa && slsOptions.length > 0 && (
+            {drillDesa && slsOptions.length > 0 && (
               <>
                 <label style={{ fontSize: 10, fontWeight: 700, color: '#8C7B6B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, display: 'block' }}>
                   Filter SLS
                 </label>
                 <select
-                  value={mobSls?.idsls ?? ''}
+                  value={selectedSls?.idsls ?? ''}
                   onChange={e => {
                     const v = e.target.value
-                    if (!v) { setMobSls(null); return }
+                    if (!v) { setSelectedSls(null); return }
                     const opt = slsOptions.find(o => o.idsls === v)
-                    if (opt) setMobSls({ idsls: opt.idsls, nmsls: opt.nmsls })
+                    if (opt) setSelectedSls({ idsls: opt.idsls, nmsls: opt.nmsls })
                   }}
-                  style={{
-                    width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #EDE3D8',
-                    background: 'white', fontSize: 12, fontWeight: 700, color: '#3D3D3D',
-                    cursor: 'pointer', outline: 'none', marginBottom: 12,
-                  }}
+                  style={dropdownStyle}
                 >
-                  <option value="">— pilih SLS —</option>
+                  <option value="">— pilih SLS untuk info —</option>
                   {slsOptions.map(o => (
                     <option key={o.idsls} value={o.idsls}>SLS {o.nmsls || o.idsls.slice(-4)}</option>
                   ))}
@@ -603,47 +578,43 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
               Detail Daerah
             </div>
             {(() => {
-              // Mobile: tampilkan info wilayah terdalam yang dipilih (SLS > Desa > Kec).
-              // Desktop: pakai `selected` (klik di peta atau top-1).
-              if (isMobile) {
-                if (mobSls) {
-                  const s = slsOptions.find(o => o.idsls === mobSls.idsls)
-                  if (s) return (
-                    <>
-                      <KecamatanTooltip
-                        nama={`SLS ${s.nmsls || mobSls.idsls.slice(-4)}`}
-                        target={s.target_usaha}
-                        realisasi={s.realisasi}
-                        persentase={s.persentase}
-                        breakdown={s.breakdown ?? undefined}
-                        skalaFilter={skalaFilter}
-                      />
-                      <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${s.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
-                      </div>
-                    </>
-                  )
-                }
-                if (mobDesa) {
-                  const d = desaOptions.find(o => o.iddesa === mobDesa.iddesa)
-                  if (d) return (
-                    <>
-                      <KecamatanTooltip
-                        nama={`Desa ${d.nmdesa}`}
-                        target={d.target}
-                        realisasi={d.realisasi}
-                        persentase={d.persentase}
-                        breakdown={d.breakdown ?? undefined}
-                        skalaFilter={skalaFilter}
-                      />
-                      <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${d.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
-                      </div>
-                    </>
-                  )
-                }
+              // Info wilayah terdalam yang dipilih: SLS > Desa > Kec (selected row).
+              if (selectedSls) {
+                const s = slsOptions.find(o => o.idsls === selectedSls.idsls)
+                if (s) return (
+                  <>
+                    <KecamatanTooltip
+                      nama={`SLS ${s.nmsls || selectedSls.idsls.slice(-4)}`}
+                      target={s.target_usaha}
+                      realisasi={s.realisasi}
+                      persentase={s.persentase}
+                      breakdown={s.breakdown ?? undefined}
+                      skalaFilter={skalaFilter}
+                    />
+                    <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${s.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
+                    </div>
+                  </>
+                )
               }
-              // Default (desktop atau mobile tanpa pilih desa/sls): info kec / row terpilih
+              if (drillDesa) {
+                const d = desaOptions.find(o => o.iddesa === drillDesa.iddesa)
+                if (d) return (
+                  <>
+                    <KecamatanTooltip
+                      nama={`Desa ${d.nmdesa}`}
+                      target={d.target}
+                      realisasi={d.realisasi}
+                      persentase={d.persentase}
+                      breakdown={d.breakdown ?? undefined}
+                      skalaFilter={skalaFilter}
+                    />
+                    <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${d.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
+                    </div>
+                  </>
+                )
+              }
               if (selected) return (
                 <>
                   <KecamatanTooltip
@@ -667,14 +638,12 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
               )
               return (
                 <p style={{ fontSize: 13, color: '#8C7B6B', lineHeight: 1.6, margin: 0 }}>
-                  {isMobile ? 'Pilih kecamatan di dropdown untuk melihat detail.' : 'Klik salah satu kecamatan di peta untuk melihat detail realisasi pencacahan.'}
+                  Pilih kecamatan di dropdown untuk melihat detail.
                 </p>
               )
             })()}
             <p style={{ fontSize: 10, color: '#8C7B6B', marginTop: 16, fontStyle: 'italic', marginBottom: 0 }}>
-              {isMobile
-                ? 'Gunakan dropdown di atas untuk navigasi wilayah Kec → Desa → SLS.'
-                : 'Klik kecamatan di peta untuk mengganti detail, atau pakai dropdown di atas untuk melihat sebaran per desa.'}
+              Pakai dropdown di atas untuk navigasi wilayah Kec → Desa → SLS.
             </p>
           </div>
         </motion.div>

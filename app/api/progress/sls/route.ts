@@ -99,10 +99,16 @@ export async function GET(req: NextRequest) {
       const umkT = Number(r.umk_target), umkD = Number(r.umk_done)
       const umT  = Number(r.um_target),  umD  = Number(r.um_done)
       const ubT  = Number(r.ub_target),  ubD  = Number(r.ub_done)
-      const idsls = `${r.kdprov}${r.kdkab}${r.kdkec}${r.kddesa}${r.kdsls ?? ''}`
+      // Normalisasi kdsls supaya konsisten dengan geojson (4-digit zero-padded).
+      // - Kalau kdsls panjang >= 14 → diasumsikan composed idsls, ambil 4 digit terakhir.
+      // - Kalau panjang < 4 → padStart('0').
+      const rawKdsls = String(r.kdsls ?? '')
+      const kdslsLocal = rawKdsls.length >= 14 ? rawKdsls.slice(-4) : rawKdsls.padStart(4, '0')
+      const idsls = `${r.kdprov}${r.kdkab}${r.kdkec}${r.kddesa}${kdslsLocal}`
       return {
         idsls,
-        kdsls: r.kdsls ?? '',
+        kdsls: kdslsLocal,
+        kdslsRaw: rawKdsls,
         nmsls: r.nmsls ?? '',
         target_usaha: target,
         realisasi: real,
