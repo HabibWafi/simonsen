@@ -10,10 +10,10 @@ import { withBase } from '@/lib/basePath'
 import { buildKecamatanTooltipHtml } from './KecamatanTooltip'
 import type { ProgressBreakdown } from '@/types'
 
-interface DesaRow {
-  kddesa: string
-  nmdesa: string
-  kdkec: string
+interface SlsRow {
+  idsls: string       // 14-digit komposit
+  kdsls: string
+  nmsls: string
   target_usaha: number
   realisasi: number
   persentase: number
@@ -21,12 +21,11 @@ interface DesaRow {
 }
 
 type Props = {
-  kdkec: string  // 7-digit composed: kdprov+kdkab+kdkec, e.g. "1605030"
-  nmkec: string
+  iddesa: string      // 10-digit komposit: kdprov+kdkab+kdkec+kddesa
+  nmdesa: string
+  nmkec?: string      // optional, untuk breadcrumb badge
   skala: '' | 'UMK' | 'UM' | 'UB'
   onBack: () => void
-  /** Klik desa → drill-down ke peta SLS. iddesa = 10-digit komposit. */
-  onDesaClick?: (iddesa: string, nmdesa: string) => void
 }
 
 function pctToColor(pct: number): string {
@@ -38,37 +37,32 @@ function pctToColor(pct: number): string {
   return '#FFF0DC'
 }
 
-/** Compose 7-digit kdkec key from desa GeoJSON properties (which only has 3-digit kdkec). */
-function composedKdkec(props: any): string {
-  return `${props?.kdprov ?? ''}${props?.kdkab ?? ''}${props?.kdkec ?? ''}`
+/** Compose 10-digit iddesa key dari geojson props (yang punya kdprov/kdkab/kdkec/kddesa terpisah). */
+function composedIddesa(props: any): string {
+  return `${props?.kdprov ?? ''}${props?.kdkab ?? ''}${props?.kdkec ?? ''}${props?.kddesa ?? ''}`
 }
 
-export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Props) {
+export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) {
   const [geoJson, setGeoJson] = useState<FeatureCollection | null>(null)
-  const [desaData, setDesaData] = useState<DesaRow[]>([])
+  const [slsData, setSlsData] = useState<SlsRow[]>([])
   const [loading, setLoading] = useState(true)
   const [bounds, setBounds] = useState<L.LatLngBoundsExpression | null>(null)
 
   useEffect(() => {
     setLoading(true)
     Promise.all([
-      fetch(withBase('/geo/musirawas_desa.geojson')).then(r => r.json()),
-      fetch(`/api/progress/desa?kec=${encodeURIComponent(kdkec)}${skala ? `&skala=${skala}` : ''}`).then(r => r.json()),
+      fetch(withBase('/geo/musirawas_sls-subsls.geojson')).then(r => r.json()),
+      fetch(`/api/progress/sls?desa=${encodeURIComponent(iddesa)}${skala ? `&skala=${skala}` : ''}`).then(r => r.json()),
     ])
       .then(([geo, agg]) => {
-        // FIX iterasi 5: compose kdprov+kdkab+kdkec dari properties (idkec field MISSING di desa geojson)
-        // FIX iterasi 9: fallback match by nmkec (tahan drift kode kdkec)
-        const nm = nmkec.toUpperCase().trim()
-        const allFeatures = (geo as FeatureCollection).features
-        let filtered = allFeatures.filter(f => composedKdkec(f.properties) === kdkec)
-        if (filtered.length === 0 && nm) {
-          filtered = allFeatures.filter(f => String(f.properties?.nmkec ?? '').toUpperCase().trim() === nm)
-        }
+        const filtered = (geo as FeatureCollection).features.filter(f =>
+          composedIddesa(f.properties) === iddesa,
+        )
         const fc: FeatureCollection = { type: 'FeatureCollection', features: filtered }
         setGeoJson(fc)
-        setDesaData(agg.data ?? [])
+        setSlsData(agg.data ?? [])
 
-        // Auto-fit bounds dari filtered features
+        // Auto-fit bounds
         if (filtered.length > 0) {
           try {
             const layer = L.geoJSON(fc as any)
@@ -78,21 +72,27 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
         }
       })
       .finally(() => setLoading(false))
-  }, [kdkec, skala])
+  }, [iddesa, skala])
 
+  // Map dari idsls (14-digit) → SlsRow. Fallback: 4-digit kdsls match.
   const byKey = useMemo(() => {
-    const m = new Map<string, DesaRow>()
-    for (const d of desaData) m.set(d.kddesa, d)
+    const m = new Map<string, SlsRow>()
+    for (const d of slsData) {
+      if (d.idsls) m.set(d.idsls, d)
+      if (d.kdsls) m.set(d.kdsls, d) // fallback kalau kdsls lokal
+    }
     return m
-  }, [desaData])
+  }, [slsData])
 
   const style = (feature?: Feature) => {
-    const iddesa = String(feature?.properties?.iddesa ?? '')
-    const d = byKey.get(iddesa)
+    const p = feature?.properties ?? {}
+    const idsls = String(p.idsls ?? '')
+    const kdsls = String(p.kdsls ?? '')
+    const d = byKey.get(idsls) || byKey.get(kdsls)
     const pct = d?.persentase ?? 0
     return {
       fillColor: pctToColor(pct),
-      weight: 1.2,
+      weight: 1.1,
       opacity: 1,
       color: '#C85E0A',
       fillOpacity: 0.78,
@@ -100,34 +100,40 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
   }
 
   const onEachFeature = (feature: Feature, layer: Layer) => {
-    const iddesa = String(feature.properties?.iddesa ?? '')
-    const nmdesa = String(feature.properties?.nmdesa ?? '')
-    const d = byKey.get(iddesa)
-    const drillHint = onDesaClick
-      ? `<div style="font-size:10px;color:#8C7B6B;margin-top:8px;border-top:1px dashed #ddd;padding-top:6px">Klik untuk drill-down ke SLS →</div>`
+    const p = feature.properties ?? {}
+    const idsls = String(p.idsls ?? '')
+    const kdsls = String(p.kdsls ?? '')
+    const nmsls = String(p.nmsls ?? '')
+    const nmKetua = p.nm_ketua ? String(p.nm_ketua) : ''
+    const luasHa = p.luas ? (Number(p.luas) / 10000).toFixed(2) : '' // m² → ha
+    const d = byKey.get(idsls) || byKey.get(kdsls)
+
+    const footer = (nmKetua || luasHa)
+      ? `<div style="font-size:10px;color:#8C7B6B;margin-top:8px;border-top:1px dashed #ddd;padding-top:6px">
+          ${nmKetua ? `Ketua: <b>${nmKetua}</b>` : ''}
+          ${nmKetua && luasHa ? ' · ' : ''}
+          ${luasHa ? `Luas: <b>${luasHa} ha</b>` : ''}
+        </div>`
       : ''
+
     const html = d
       ? `<div style="font-family:Inter,sans-serif;min-width:220px">
           ${buildKecamatanTooltipHtml({
-            nama: `Desa ${nmdesa}`,
+            nama: `SLS ${nmsls || kdsls}`,
             target: d.target_usaha,
             realisasi: d.realisasi,
             persentase: d.persentase,
             breakdown: d.breakdown ?? undefined,
             skalaFilter: skala,
           })}
-          ${drillHint}
+          ${footer}
         </div>`
-      : `<div style="font-family:Inter,sans-serif;min-width:160px">
-          <strong style="font-size:13px;color:#1A1A1A">Desa ${nmdesa}</strong><br/>
+      : `<div style="font-family:Inter,sans-serif;min-width:180px">
+          <strong style="font-size:13px;color:#1A1A1A">SLS ${nmsls || kdsls}</strong><br/>
           <span style="font-size:11px;color:#8C7B6B">Belum ada data usaha</span>
-          ${drillHint}
+          ${footer}
         </div>`
     ;(layer as any).bindTooltip(html, { permanent: false, sticky: true })
-
-    if (onDesaClick) {
-      layer.on({ click: () => onDesaClick(iddesa, nmdesa) })
-    }
   }
 
   const featureCount = geoJson?.features.length ?? 0
@@ -142,7 +148,7 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
         fontSize: 12, fontWeight: 700, cursor: 'pointer',
         boxShadow: '0 4px 12px rgba(0,0,0,.12)',
         backdropFilter: 'blur(6px)',
-      }}>← Kembali ke Peta Kecamatan</button>
+      }}>← Kembali ke Peta Desa</button>
 
       <div style={{
         position: 'absolute', top: 12, right: 12, zIndex: 600,
@@ -150,28 +156,32 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
         background: 'rgba(26,26,26,.85)', color: 'white',
         fontSize: 12, fontWeight: 700,
         boxShadow: '0 4px 12px rgba(0,0,0,.2)',
-      }}>📍 Kec. {nmkec} <span style={{ opacity: .7, marginLeft: 6 }}>· {featureCount} desa</span></div>
+        maxWidth: 280,
+      }}>
+        📍 {nmkec ? `${nmkec} › ` : ''}Desa {nmdesa}
+        <span style={{ opacity: .7, marginLeft: 6 }}>· {featureCount} SLS</span>
+      </div>
 
       {loading ? (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EDE0' }}>
-          <p style={{ color: '#6B6B6B', fontSize: 13 }}>Memuat peta desa…</p>
+          <p style={{ color: '#6B6B6B', fontSize: 13 }}>Memuat peta SLS…</p>
         </div>
       ) : featureCount > 0 && geoJson ? (
         <MapContainer
-          {...(bounds ? { bounds } : { center: [-3.0, 102.95] as L.LatLngExpression, zoom: 11 })}
+          {...(bounds ? { bounds } : { center: [-3.0, 102.95] as L.LatLngExpression, zoom: 12 })}
           style={{ height: '100%', width: '100%' }}
         >
           <TileLayer
             attribution='&copy; OpenStreetMap'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <GeoJSON key={kdkec + skala} data={geoJson} style={style as any} onEachFeature={onEachFeature} />
+          <GeoJSON key={iddesa + skala} data={geoJson} style={style as any} onEachFeature={onEachFeature} />
         </MapContainer>
       ) : (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EDE0', textAlign: 'center', padding: 24 }}>
           <div>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🗺️</div>
-            <p style={{ color: '#6B6B6B', fontSize: 13 }}>Data peta desa tidak tersedia untuk kecamatan ini.<br /><span style={{ fontSize: 11, color: '#8C7B6B' }}>(kdkec={kdkec})</span></p>
+            <p style={{ color: '#6B6B6B', fontSize: 13 }}>Data peta SLS tidak tersedia untuk desa ini.<br /><span style={{ fontSize: 11, color: '#8C7B6B' }}>(iddesa={iddesa})</span></p>
           </div>
         </div>
       )}

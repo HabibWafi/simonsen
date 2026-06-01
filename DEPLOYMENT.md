@@ -157,3 +157,92 @@ Saat ini, code reuse antar sensus dilakukan dengan **clone & customize** — sen
 ### Mascot Bung Itung broken image
 - Upload file ke `public/images/mascot/bung-itung.png` (PNG transparan bersih)
 - Cek path Next/Image dengan basePath sudah di-prefix otomatis
+
+---
+
+## 7. Deploy via Upload ZIP (Hostinger)
+
+Workflow yang dipakai sehari-hari: bungkus source jadi 1 ZIP, upload ke
+Hostinger via hPanel File Manager, lalu install + build di sana. **Tidak**
+pakai git push.
+
+### A. Generate ZIP deploy di lokal
+```bash
+git archive --format=zip --output=se2026-deploy.zip HEAD
+```
+- Hanya file yang ter-commit yang ikut → otomatis tidak ada `node_modules`,
+  `.next`, `.git`, `.env*`, atau zip backup (`se.zip`, `se2026.zip`).
+- Hasil ~9 MB, ~240 file.
+- Verifikasi cepat:
+  ```bash
+  unzip -l se2026-deploy.zip | grep -E "node_modules|\\.next/|\\.env|\\.git/"   # harus kosong
+  ```
+
+### B. Upload di Hostinger
+1. **File Manager**: hPanel → Domain `sensus.bpskabmusirawas.com` →
+   File Manager → masuk ke folder app Node.js (mis. `domains/<domain>/public_html`).
+2. Upload `se2026-deploy.zip` → klik kanan → **Extract**.
+3. (Opsional) hapus file `se2026-deploy.zip` setelah ekstrak.
+
+### C. Konfigurasi Node.js panel
+hPanel → Advanced → Node.js:
+- **Application root**: folder tempat zip diekstrak.
+- **Application URL**: `https://sensus.bpskabmusirawas.com`.
+- **Application startup file**: `npm start`.
+- **Node.js version**: 20 atau 22.
+
+### D. Environment Variables
+hPanel → Advanced → Node.js → **Environment Variables**, tambah
+satu-per-satu dari file lokal `.env-production`:
+
+| Variable | Nilai |
+|----------|-------|
+| `NODE_ENV` | `production` |
+| `HOSTNAME` | `0.0.0.0` |
+| `NEXTAUTH_URL` | `https://sensus.bpskabmusirawas.com` |
+| `NEXTAUTH_SECRET` | (dari `.env-production`, jangan dishare) |
+| `AUTH_TRUST_HOST` | `true` |
+| `DB_HOST` | `localhost` |
+| `DB_PORT` | `3306` |
+| `DB_USER` | `uXXXXXXXX_se2026` |
+| `DB_PASS` | (password DB Hostinger) |
+| `DB_NAME` | `uXXXXXXXX_se2026` |
+| `BOOTSTRAP_ADMIN_NIP` | `admin` |
+| `BOOTSTRAP_ADMIN_NAMA` | `Administrator` |
+| `BOOTSTRAP_ADMIN_PASSWORD` | (password admin awal yang kuat) |
+
+> ⚠️ `.env-production` **tidak ikut** di ZIP — secret-nya cukup di panel env
+> Hostinger. Jangan upload file `.env*` ke server.
+
+### E. Install + Build + Start
+Dari panel Node.js:
+1. **Run NPM Install** → tunggu selesai (1–3 menit).
+2. **Run NPM Script** → `build` → tunggu sampai muncul "Compiled
+   successfully" + daftar route.
+3. **Start App**.
+
+### F. Setup database (sekali saja)
+Buka SSH terminal Hostinger (hPanel → Advanced → SSH Access). `cd` ke
+application root, lalu:
+```bash
+node scripts/setup-db.mjs
+```
+Script ini bikin database (kalau belum ada), apply semua migrasi
+(iterasi 4, 7, 9), seed (desa, dummy, posts, tim_se), dan bikin user
+admin awal. Idempotent — boleh dijalankan ulang.
+
+### G. Test
+Buka `https://sensus.bpskabmusirawas.com/se/2026` — beranda muncul dengan
+navbar oren, peta choropleth, footer oren.
+
+Login: `https://sensus.bpskabmusirawas.com/se/2026/login`
+- NIP: `admin`
+- Password: yang kamu set di `BOOTSTRAP_ADMIN_PASSWORD`
+
+### H. Update versi berikutnya
+Saat ada perubahan code:
+1. `git add -A && git commit -m "..."` di lokal.
+2. `git archive --format=zip --output=se2026-deploy.zip HEAD`.
+3. Upload zip baru ke Hostinger, **Extract & Overwrite**.
+4. Run NPM Install (kalau `package.json` berubah) → Run script `build` →
+   Restart App.

@@ -15,6 +15,10 @@ const MapDesa = dynamic(() => import('@/components/MapDesa'), {
   ssr: false,
   loading: () => <MapLoader />,
 })
+const MapSls = dynamic(() => import('@/components/MapSls'), {
+  ssr: false,
+  loading: () => <MapLoader />,
+})
 
 type Skala = '' | 'UMK' | 'UM' | 'UB'
 type SortKey = 'kecamatan' | 'target_usaha' | 'realisasi' | 'persentase'
@@ -32,6 +36,7 @@ export default function ProgressPage() {
   const [stats, setStats] = useState<any>(mockStats)
   const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null)
   const [drilledKec, setDrilledKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
+  const [drilledDesa, setDrilledDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('persentase')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -129,6 +134,7 @@ export default function ProgressPage() {
             {drilledKec && (
               <span style={{ marginLeft: 'auto', fontSize: 12, color: '#E8751A', fontWeight: 700 }}>
                 🔍 Drill-down: {drilledKec.nmkec}
+                {drilledDesa && <> › <span style={{ color: '#C85E0A' }}>Desa {drilledDesa.nmdesa}</span></>}
               </span>
             )}
           </div>
@@ -137,11 +143,29 @@ export default function ProgressPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 32, marginBottom: 40 }} className="map-layout">
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', marginBottom: 16 }}>
-                {drilledKec ? `Peta Desa di Kec. ${drilledKec.nmkec}` : 'Peta Choropleth — Klik kecamatan untuk drill-down'}
+                {drilledDesa
+                  ? `Peta SLS — Desa ${drilledDesa.nmdesa}`
+                  : drilledKec
+                    ? `Peta Desa — Kec. ${drilledKec.nmkec}`
+                    : 'Peta Choropleth — Klik kecamatan untuk drill-down'}
               </h2>
               <div style={{ position: 'relative' }}>
-                {drilledKec ? (
-                  <MapDesa kdkec={drilledKec.kdkec} nmkec={drilledKec.nmkec} skala={skala} onBack={() => setDrilledKec(null)} />
+                {drilledDesa ? (
+                  <MapSls
+                    iddesa={drilledDesa.iddesa}
+                    nmdesa={drilledDesa.nmdesa}
+                    nmkec={drilledKec?.nmkec}
+                    skala={skala}
+                    onBack={() => setDrilledDesa(null)}
+                  />
+                ) : drilledKec ? (
+                  <MapDesa
+                    kdkec={drilledKec.kdkec}
+                    nmkec={drilledKec.nmkec}
+                    skala={skala}
+                    onBack={() => { setDrilledKec(null); setDrilledDesa(null) }}
+                    onDesaClick={(iddesa, nmdesa) => setDrilledDesa({ iddesa, nmdesa })}
+                  />
                 ) : geoJson ? (
                   <MapKecamatan
                     data={progress}

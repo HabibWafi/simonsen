@@ -21,6 +21,7 @@ const MapLoader = () => (
 
 const MapKecamatan = dynamic(() => import('@/components/MapKecamatan'), { ssr: false, loading: MapLoader })
 const MapDesa = dynamic(() => import('@/components/MapDesa'), { ssr: false, loading: MapLoader })
+const MapSls  = dynamic(() => import('@/components/MapSls'),  { ssr: false, loading: MapLoader })
 
 const EASE = [0.22, 1, 0.36, 1] as const
 
@@ -123,6 +124,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
   const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [drillKec, setDrillKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
+  const [drillDesa, setDrillDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
 
   // Load GeoJSON kecamatan sekali (sama dengan halaman /se/2026/progress).
   useEffect(() => {
@@ -409,13 +411,31 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
             <div style={{ marginBottom: 14, minHeight: 52 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 }}>Peta Sebaran</div>
               <div style={{ fontSize: 15, fontWeight: 800, color: '#1A1A1A', letterSpacing: -.2 }}>
-                {drillKec ? `Peta Desa — Kec. ${drillKec.nmkec}` : 'Choropleth 14 Kecamatan Musi Rawas'}
+                {drillDesa
+                  ? `Peta SLS — Desa ${drillDesa.nmdesa}`
+                  : drillKec
+                    ? `Peta Desa — Kec. ${drillKec.nmkec}`
+                    : 'Choropleth 14 Kecamatan Musi Rawas'}
               </div>
             </div>
             {!geoJson ? (
               <MapLoader />
+            ) : drillDesa ? (
+              <MapSls
+                iddesa={drillDesa.iddesa}
+                nmdesa={drillDesa.nmdesa}
+                nmkec={drillKec?.nmkec}
+                skala={skalaFilter}
+                onBack={() => setDrillDesa(null)}
+              />
             ) : drillKec ? (
-              <MapDesa kdkec={drillKec.kdkec} nmkec={drillKec.nmkec} skala={skalaFilter} onBack={() => setDrillKec(null)} />
+              <MapDesa
+                kdkec={drillKec.kdkec}
+                nmkec={drillKec.nmkec}
+                skala={skalaFilter}
+                onBack={() => { setDrillKec(null); setDrillDesa(null) }}
+                onDesaClick={(iddesa, nmdesa) => setDrillDesa({ iddesa, nmdesa })}
+              />
             ) : (
               <MapKecamatan
                 data={progress as any}
@@ -450,6 +470,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
               value={drillKec?.kdkec ?? ''}
               onChange={e => {
                 const v = e.target.value
+                setDrillDesa(null)
                 if (!v) { setDrillKec(null); return }
                 const opt = kecOptions.find(o => o.kdkec === v)
                 if (opt) { setDrillKec(opt); setSelectedKey(progress.find(k => String((k as any).kdkec ?? '') === v) ? v : selectedKey) }
