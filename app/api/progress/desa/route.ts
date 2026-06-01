@@ -49,8 +49,12 @@ export async function GET(req: NextRequest) {
       const umkT = Number(r.umk_target), umkD = Number(r.umk_done)
       const umT  = Number(r.um_target),  umD  = Number(r.um_done)
       const ubT  = Number(r.ub_target),  ubD  = Number(r.ub_done)
+      // iddesa kanonik 10-digit (kddesa sudah 10-digit di data; fallback kdkec+kddesa).
+      const kddesaStr = String(r.kddesa ?? '')
+      const iddesa = kddesaStr.length >= 10 ? kddesaStr : `${r.kdkec ?? ''}${kddesaStr}`
       return {
         kddesa: r.kddesa,
+        iddesa,
         nmdesa: r.nmdesa,
         kdkec: r.kdkec,
         target_usaha: target,

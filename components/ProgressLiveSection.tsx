@@ -7,6 +7,7 @@ import { motion } from 'framer-motion'
 import DotsPattern from '@/components/decor/DotsPattern'
 import KecamatanTooltip from '@/components/KecamatanTooltip'
 import { withBase } from '@/lib/basePath'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import type { mockProgress, mockStats } from '@/lib/mockData'
 import type { ProgressBreakdown, SkalaUsaha } from '@/types'
 
@@ -29,6 +30,10 @@ const dropdownStyle: React.CSSProperties = {
   width: '100%', padding: '9px 12px', borderRadius: 10, border: '1px solid #EDE3D8',
   background: 'white', fontSize: 12, fontWeight: 700, color: '#3D3D3D',
   cursor: 'pointer', outline: 'none', marginBottom: 12,
+}
+const labelStyle: React.CSSProperties = {
+  fontSize: 10, fontWeight: 700, color: '#8C7B6B', textTransform: 'uppercase',
+  letterSpacing: 1, marginBottom: 6, display: 'block',
 }
 
 type SkalaFilter = '' | SkalaUsaha
@@ -133,6 +138,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
   const [drillDesa, setDrillDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
   // Info SLS terpilih lewat dropdown (peta tetap di level SLS, dropdown update info panel)
   const [selectedSls, setSelectedSls] = useState<{ idsls: string; nmsls: string } | null>(null)
+  const isMobile = useIsMobile()
 
   // Dropdown data: desa list per kec (lazy fetch), SLS list per desa (lazy fetch)
   const [desaOptions, setDesaOptions] = useState<Array<{ iddesa: string; nmdesa: string; target: number; realisasi: number; persentase: number; breakdown?: ProgressBreakdown | null }>>([])
@@ -145,7 +151,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
       .then(r => r.json())
       .then(j => {
         const list = (j.data ?? []).map((d: any) => ({
-          iddesa: `${d.kdkec}${d.kddesa}`,
+          iddesa: d.iddesa ?? (String(d.kddesa ?? '').length >= 10 ? String(d.kddesa) : `${d.kdkec ?? ''}${d.kddesa ?? ''}`),
           nmdesa: d.nmdesa,
           target: Number(d.target_usaha ?? 0),
           realisasi: Number(d.realisasi ?? 0),
@@ -444,208 +450,203 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
           viewport={{ once: true, amount: 0.15 }}
           transition={{ duration: 0.7, ease: EASE }}
           className="prog-map-grid"
-          style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: 20 }}
+          style={{ display: isMobile ? 'flex' : 'grid', flexDirection: 'column', gridTemplateColumns: '3fr 1fr', gap: isMobile ? 16 : 20 }}
         >
-          {/* Peta choropleth — sama dengan halaman /se/2026/progress */}
-          <div>
-            <div style={{ marginBottom: 14, minHeight: 52 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 }}>Peta Sebaran</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#1A1A1A', letterSpacing: -.2 }}>
-                {drillDesa
-                  ? `Peta SLS — Desa ${drillDesa.nmdesa}`
-                  : drillKec
-                    ? `Peta Desa — Kec. ${drillKec.nmkec}`
-                    : 'Choropleth 14 Kecamatan Musi Rawas'}
-              </div>
-            </div>
-            {!geoJson ? (
-              <MapLoader />
-            ) : drillDesa ? (
-              <MapSls
-                iddesa={drillDesa.iddesa}
-                nmdesa={drillDesa.nmdesa}
-                nmkec={drillKec?.nmkec}
-                skala={skalaFilter}
-                onBack={() => setDrillDesa(null)}
-              />
-            ) : drillKec ? (
-              <MapDesa
-                kdkec={drillKec.kdkec}
-                nmkec={drillKec.nmkec}
-                skala={skalaFilter}
-                onBack={() => { setDrillKec(null); setDrillDesa(null); setSelectedSls(null) }}
-                /* Beranda: tanpa klik-drill. Navigasi level via dropdown. */
-              />
-            ) : (
-              <MapKecamatan
-                data={progress as any}
-                geoJson={geoJson}
-                skalaFilter={skalaFilter}
-                activeKec={selected ? String((selected as any).kdkec ?? '') : null}
-                onKecClick={(kdkec, nmkec) => {
-                  // Klik kecamatan di peta = update info panel saja (TIDAK drill).
-                  const found = progress.find(k => String((k as any).kdkec ?? '') === kdkec || (k.kecamatan ?? '').toUpperCase() === nmkec.toUpperCase())
-                  setSelectedKey(found ? rowKey(found) : kdkec)
-                }}
-              />
-            )}
-          </div>
-
-          {/* Panel detail kecamatan terpilih — tinggi sejajar dengan peta */}
-          <div style={{
-            background: 'rgba(255,255,255,.82)',
-            backdropFilter: 'blur(18px) saturate(160%)',
-            WebkitBackdropFilter: 'blur(18px) saturate(160%)',
-            border: '1px solid rgba(255,255,255,.7)',
-            borderRadius: 18,
-            padding: 20,
-            boxShadow: '0 12px 40px rgba(232,117,26,.12), 0 2px 8px rgba(0,0,0,.04)',
-            display: 'flex', flexDirection: 'column',
-            marginTop: 66,
-          }}>
-            {/* Filter wilayah — dropdown nav konsisten desktop & mobile.
-                Pilih dropdown = drill peta. Klik feature peta tidak drill. */}
-            <label style={{ fontSize: 10, fontWeight: 700, color: '#8C7B6B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, display: 'block' }}>
-              Filter Kecamatan
-            </label>
-            <select
-              value={drillKec?.kdkec ?? ''}
-              onChange={e => {
-                const v = e.target.value
-                setDrillDesa(null); setSelectedSls(null)
-                if (!v) { setDrillKec(null); return }
-                const opt = kecOptions.find(o => o.kdkec === v)
-                if (!opt) return
-                setDrillKec(opt)
-                setSelectedKey(progress.find(k => String((k as any).kdkec ?? '') === v) ? v : selectedKey)
-              }}
-              style={dropdownStyle}
-            >
-              <option value="">🗺️ Semua Kecamatan (peta kab.)</option>
-              {kecOptions.map(o => (
-                <option key={o.kdkec} value={o.kdkec}>{o.nmkec} — lihat per desa</option>
-              ))}
-            </select>
-
-            {drillKec && desaOptions.length > 0 && (
-              <>
-                <label style={{ fontSize: 10, fontWeight: 700, color: '#8C7B6B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, display: 'block' }}>
-                  Filter Desa
-                </label>
-                <select
-                  value={drillDesa?.iddesa ?? ''}
-                  onChange={e => {
-                    const v = e.target.value
-                    setSelectedSls(null)
-                    if (!v) { setDrillDesa(null); return }
-                    const opt = desaOptions.find(o => o.iddesa === v)
-                    if (opt) setDrillDesa({ iddesa: opt.iddesa, nmdesa: opt.nmdesa })
-                  }}
-                  style={dropdownStyle}
-                >
-                  <option value="">— semua desa (peta kec.) —</option>
-                  {desaOptions.map(o => (
-                    <option key={o.iddesa} value={o.iddesa}>{o.nmdesa} — lihat per SLS</option>
-                  ))}
-                </select>
-              </>
-            )}
-
-            {drillDesa && slsOptions.length > 0 && (
-              <>
-                <label style={{ fontSize: 10, fontWeight: 700, color: '#8C7B6B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6, display: 'block' }}>
-                  Filter SLS
-                </label>
-                <select
-                  value={selectedSls?.idsls ?? ''}
-                  onChange={e => {
-                    const v = e.target.value
-                    if (!v) { setSelectedSls(null); return }
-                    const opt = slsOptions.find(o => o.idsls === v)
-                    if (opt) setSelectedSls({ idsls: opt.idsls, nmsls: opt.nmsls })
-                  }}
-                  style={dropdownStyle}
-                >
-                  <option value="">— pilih SLS untuk info —</option>
-                  {slsOptions.map(o => (
-                    <option key={o.idsls} value={o.idsls}>SLS {o.nmsls || o.idsls.slice(-4)}</option>
-                  ))}
-                </select>
-              </>
-            )}
-
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 }}>
-              Detail Daerah
-            </div>
-            {(() => {
-              // Info wilayah terdalam yang dipilih: SLS > Desa > Kec (selected row).
-              if (selectedSls) {
-                const s = slsOptions.find(o => o.idsls === selectedSls.idsls)
-                if (s) return (
-                  <>
-                    <KecamatanTooltip
-                      nama={`SLS ${s.nmsls || selectedSls.idsls.slice(-4)}`}
-                      target={s.target_usaha}
-                      realisasi={s.realisasi}
-                      persentase={s.persentase}
-                      breakdown={s.breakdown ?? undefined}
-                      skalaFilter={skalaFilter}
-                    />
-                    <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${s.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
-                    </div>
-                  </>
-                )
-              }
-              if (drillDesa) {
-                const d = desaOptions.find(o => o.iddesa === drillDesa.iddesa)
-                if (d) return (
-                  <>
-                    <KecamatanTooltip
-                      nama={`Desa ${d.nmdesa}`}
-                      target={d.target}
-                      realisasi={d.realisasi}
-                      persentase={d.persentase}
-                      breakdown={d.breakdown ?? undefined}
-                      skalaFilter={skalaFilter}
-                    />
-                    <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${d.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
-                    </div>
-                  </>
-                )
-              }
-              if (selected) return (
-                <>
-                  <KecamatanTooltip
-                    nama={selected.kecamatan ?? (selected as any).nmkec ?? '-'}
-                    target={selected.target_usaha}
-                    realisasi={selected.realisasi}
-                    persentase={selected.persentase}
-                    breakdown={selected.breakdown ?? undefined}
-                    skalaFilter={skalaFilter}
-                  />
-                  <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${selected.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
+          {(() => {
+            const mapEl = (
+              <div>
+                <div style={{ marginBottom: 14, minHeight: isMobile ? 0 : 52 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 4 }}>Peta Sebaran</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#1A1A1A', letterSpacing: -.2 }}>
+                    {drillDesa
+                      ? `Peta SLS — Desa ${drillDesa.nmdesa}`
+                      : drillKec
+                        ? `Peta Desa — Kec. ${drillKec.nmkec}`
+                        : 'Choropleth 14 Kecamatan Musi Rawas'}
                   </div>
-                  <Link href="/se/2026/progress" style={{
-                    marginTop: 16, fontSize: 12, fontWeight: 700, color: '#C85E0A',
-                    textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}>
-                    Lihat detail lengkap <span aria-hidden>→</span>
-                  </Link>
+                </div>
+                {!geoJson ? (
+                  <MapLoader />
+                ) : drillDesa ? (
+                  <MapSls
+                    iddesa={drillDesa.iddesa}
+                    nmdesa={drillDesa.nmdesa}
+                    nmkec={drillKec?.nmkec}
+                    skala={skalaFilter}
+                    onBack={() => setDrillDesa(null)}
+                  />
+                ) : drillKec ? (
+                  <MapDesa
+                    kdkec={drillKec.kdkec}
+                    nmkec={drillKec.nmkec}
+                    skala={skalaFilter}
+                    onBack={() => { setDrillKec(null); setDrillDesa(null); setSelectedSls(null) }}
+                  />
+                ) : (
+                  <MapKecamatan
+                    data={progress as any}
+                    geoJson={geoJson}
+                    skalaFilter={skalaFilter}
+                    activeKec={selected ? String((selected as any).kdkec ?? '') : null}
+                    onKecClick={(kdkec, nmkec) => {
+                      const found = progress.find(k => String((k as any).kdkec ?? '') === kdkec || (k.kecamatan ?? '').toUpperCase() === nmkec.toUpperCase())
+                      setSelectedKey(found ? rowKey(found) : kdkec)
+                    }}
+                  />
+                )}
+              </div>
+            )
+
+            const filterControls = (
+              <>
+                <label style={labelStyle}>Filter Kecamatan</label>
+                <select
+                  value={drillKec?.kdkec ?? ''}
+                  onChange={e => {
+                    const v = e.target.value
+                    setDrillDesa(null); setSelectedSls(null)
+                    if (!v) { setDrillKec(null); return }
+                    const opt = kecOptions.find(o => o.kdkec === v)
+                    if (!opt) return
+                    setDrillKec(opt)
+                    setSelectedKey(progress.find(k => String((k as any).kdkec ?? '') === v) ? v : selectedKey)
+                  }}
+                  style={dropdownStyle}
+                >
+                  <option value="">🗺️ Semua Kecamatan (peta kab.)</option>
+                  {kecOptions.map(o => (
+                    <option key={o.kdkec} value={o.kdkec}>{o.nmkec} — lihat per desa</option>
+                  ))}
+                </select>
+
+                {drillKec && desaOptions.length > 0 && (
+                  <>
+                    <label style={labelStyle}>Filter Desa</label>
+                    <select
+                      value={drillDesa?.iddesa ?? ''}
+                      onChange={e => {
+                        const v = e.target.value
+                        setSelectedSls(null)
+                        if (!v) { setDrillDesa(null); return }
+                        const opt = desaOptions.find(o => o.iddesa === v)
+                        if (opt) setDrillDesa({ iddesa: opt.iddesa, nmdesa: opt.nmdesa })
+                      }}
+                      style={dropdownStyle}
+                    >
+                      <option value="">— semua desa (peta kec.) —</option>
+                      {desaOptions.map(o => (
+                        <option key={o.iddesa} value={o.iddesa}>{o.nmdesa} — lihat per SLS</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+
+                {drillDesa && slsOptions.length > 0 && (
+                  <>
+                    <label style={labelStyle}>Filter SLS</label>
+                    <select
+                      value={selectedSls?.idsls ?? ''}
+                      onChange={e => {
+                        const v = e.target.value
+                        if (!v) { setSelectedSls(null); return }
+                        const opt = slsOptions.find(o => o.idsls === v)
+                        if (opt) setSelectedSls({ idsls: opt.idsls, nmsls: opt.nmsls })
+                      }}
+                      style={dropdownStyle}
+                    >
+                      <option value="">— pilih SLS untuk info —</option>
+                      {slsOptions.map(o => (
+                        <option key={o.idsls} value={o.idsls}>SLS {o.nmsls || o.idsls.slice(-4)}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </>
+            )
+
+            const detailContent = (
+              <>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 12 }}>
+                  Detail Daerah
+                </div>
+                {(() => {
+                  if (selectedSls) {
+                    const s = slsOptions.find(o => o.idsls === selectedSls.idsls)
+                    if (s) return (
+                      <>
+                        <KecamatanTooltip nama={`SLS ${s.nmsls || selectedSls.idsls.slice(-4)}`} target={s.target_usaha} realisasi={s.realisasi} persentase={s.persentase} breakdown={s.breakdown ?? undefined} skalaFilter={skalaFilter} />
+                        <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${s.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
+                        </div>
+                      </>
+                    )
+                  }
+                  if (drillDesa) {
+                    const d = desaOptions.find(o => o.iddesa === drillDesa.iddesa)
+                    if (d) return (
+                      <>
+                        <KecamatanTooltip nama={`Desa ${d.nmdesa}`} target={d.target} realisasi={d.realisasi} persentase={d.persentase} breakdown={d.breakdown ?? undefined} skalaFilter={skalaFilter} />
+                        <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${d.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
+                        </div>
+                      </>
+                    )
+                  }
+                  if (selected) return (
+                    <>
+                      <KecamatanTooltip nama={selected.kecamatan ?? (selected as any).nmkec ?? '-'} target={selected.target_usaha} realisasi={selected.realisasi} persentase={selected.persentase} breakdown={selected.breakdown ?? undefined} skalaFilter={skalaFilter} />
+                      <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${selected.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
+                      </div>
+                      <Link href="/se/2026/progress" style={{ marginTop: 16, fontSize: 12, fontWeight: 700, color: '#C85E0A', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        Lihat detail lengkap <span aria-hidden>→</span>
+                      </Link>
+                    </>
+                  )
+                  return (
+                    <p style={{ fontSize: 13, color: '#8C7B6B', lineHeight: 1.6, margin: 0 }}>
+                      Pilih kecamatan di dropdown untuk melihat detail.
+                    </p>
+                  )
+                })()}
+                <p style={{ fontSize: 10, color: '#8C7B6B', marginTop: 16, fontStyle: 'italic', marginBottom: 0 }}>
+                  Pakai dropdown di atas untuk navigasi wilayah Kec → Desa → SLS.
+                </p>
+              </>
+            )
+
+            const panelStyle: React.CSSProperties = {
+              background: 'rgba(255,255,255,.82)',
+              backdropFilter: 'blur(18px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+              border: '1px solid rgba(255,255,255,.7)',
+              borderRadius: 18,
+              padding: 20,
+              boxShadow: '0 12px 40px rgba(232,117,26,.12), 0 2px 8px rgba(0,0,0,.04)',
+              display: 'flex', flexDirection: 'column',
+            }
+
+            // Mobile: [dropdown di atas] → [peta] → [detail di bawah].
+            // Desktop: [peta kiri] + [panel kanan: dropdown + detail].
+            if (isMobile) {
+              return (
+                <>
+                  <div style={panelStyle}>{filterControls}</div>
+                  {mapEl}
+                  <div style={panelStyle}>{detailContent}</div>
                 </>
               )
-              return (
-                <p style={{ fontSize: 13, color: '#8C7B6B', lineHeight: 1.6, margin: 0 }}>
-                  Pilih kecamatan di dropdown untuk melihat detail.
-                </p>
-              )
-            })()}
-            <p style={{ fontSize: 10, color: '#8C7B6B', marginTop: 16, fontStyle: 'italic', marginBottom: 0 }}>
-              Pakai dropdown di atas untuk navigasi wilayah Kec → Desa → SLS.
-            </p>
-          </div>
+            }
+            return (
+              <>
+                {mapEl}
+                <div style={{ ...panelStyle, marginTop: 66 }}>
+                  {filterControls}
+                  {detailContent}
+                </div>
+              </>
+            )
+          })()}
         </motion.div>
 
         {/* ── CTA bottom ── */}

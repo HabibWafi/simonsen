@@ -57,7 +57,7 @@ export default function ProgressPage() {
     if (!drilledKec) { setDesaOptions([]); return }
     fetch(`/api/progress/desa?kec=${encodeURIComponent(drilledKec.kdkec)}${skala ? `&skala=${skala}` : ''}`)
       .then(r => r.json()).then(j => setDesaOptions((j.data ?? []).map((d: any) => ({
-        iddesa: `${d.kdkec}${d.kddesa}`,
+        iddesa: d.iddesa ?? (String(d.kddesa ?? '').length >= 10 ? String(d.kddesa) : `${d.kdkec ?? ''}${d.kddesa ?? ''}`),
         nmdesa: d.nmdesa,
         target: Number(d.target_usaha ?? 0),
         realisasi: Number(d.realisasi ?? 0),
@@ -232,41 +232,9 @@ export default function ProgressPage() {
                 </select>
               )}
 
-              {/* Info panel mobile — info wilayah terdalam yang dipilih */}
-              {(() => {
-                let info: any = null
-                let label = ''
-                if (selectedSls) {
-                  const s = slsOptions.find((o: any) => o.idsls === selectedSls.idsls)
-                  if (s) { info = { target: s.target_usaha, realisasi: s.realisasi, persentase: s.persentase, breakdown: s.breakdown }; label = `SLS ${s.nmsls || selectedSls.idsls.slice(-4)}` }
-                } else if (drilledDesa) {
-                  const d = desaOptions.find((o: any) => o.iddesa === drilledDesa.iddesa)
-                  if (d) { info = { target: d.target, realisasi: d.realisasi, persentase: d.persentase, breakdown: d.breakdown }; label = `Desa ${d.nmdesa}` }
-                } else if (drilledKec) {
-                  const k: any = progress.find((p: any) => String(p.kdkec ?? '') === drilledKec.kdkec)
-                  if (k) { info = { target: k.target_usaha, realisasi: k.realisasi, persentase: k.persentase, breakdown: k.breakdown }; label = k.nmkec ?? k.kecamatan }
-                }
-                if (!info) return (
-                  <p style={{ fontSize: 12, color: '#8C7B6B', fontStyle: 'italic', margin: 0 }}>
-                    Pilih kecamatan di atas untuk drill-down peta + info pencacahan.
-                  </p>
-                )
-                return (
-                  <div style={{ paddingTop: 8, borderTop: '1px dashed #EDE3D8' }}>
-                    <KecamatanTooltip
-                      nama={label}
-                      target={info.target}
-                      realisasi={info.realisasi}
-                      persentase={info.persentase}
-                      breakdown={info.breakdown ?? undefined}
-                      skalaFilter={skala}
-                    />
-                    <div style={{ marginTop: 10, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${info.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
-                    </div>
-                  </div>
-                )
-              })()}
+              <p style={{ fontSize: 11, color: '#8C7B6B', fontStyle: 'italic', margin: 0 }}>
+                Pilih wilayah untuk drill-down peta. Detail muncul di bawah peta.
+              </p>
             </div>
           )}
 
@@ -308,6 +276,37 @@ export default function ProgressPage() {
                   />
                 ) : <MapLoader />}
               </div>
+
+              {/* Mobile: detail wilayah terpilih DI BAWAH peta */}
+              {isMobile && (() => {
+                let info: any = null
+                let label = ''
+                if (selectedSls) {
+                  const s = slsOptions.find((o: any) => o.idsls === selectedSls.idsls)
+                  if (s) { info = { target: s.target_usaha, realisasi: s.realisasi, persentase: s.persentase, breakdown: s.breakdown }; label = `SLS ${s.nmsls || selectedSls.idsls.slice(-4)}` }
+                } else if (drilledDesa) {
+                  const d = desaOptions.find((o: any) => o.iddesa === drilledDesa.iddesa)
+                  if (d) { info = { target: d.target, realisasi: d.realisasi, persentase: d.persentase, breakdown: d.breakdown }; label = `Desa ${d.nmdesa}` }
+                } else if (drilledKec) {
+                  const k: any = progress.find((p: any) => String(p.kdkec ?? '') === drilledKec.kdkec)
+                  if (k) { info = { target: k.target_usaha, realisasi: k.realisasi, persentase: k.persentase, breakdown: k.breakdown }; label = k.nmkec ?? k.kecamatan }
+                }
+                return (
+                  <div style={{ marginTop: 14, padding: 16, background: 'white', borderRadius: 12, border: '1px solid #EDE3D8' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase' as const, letterSpacing: .5, marginBottom: 10 }}>Detail Wilayah</div>
+                    {info ? (
+                      <>
+                        <KecamatanTooltip nama={label} target={info.target} realisasi={info.realisasi} persentase={info.persentase} breakdown={info.breakdown ?? undefined} skalaFilter={skala} />
+                        <div style={{ marginTop: 10, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${info.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
+                        </div>
+                      </>
+                    ) : (
+                      <p style={{ fontSize: 12, color: '#8C7B6B', fontStyle: 'italic', margin: 0 }}>Pilih wilayah di filter atas untuk melihat detail UMK/UM/UB & target.</p>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
 
             <div>

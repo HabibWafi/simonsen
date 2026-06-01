@@ -66,7 +66,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const params: any[] = [iddesa]
+    // Filter tahan format kddesa: 10-digit (kddesa = iddesa) atau 3-digit (kdkec+kddesa).
+    const params: any[] = [iddesa, iddesa]
     let sql = `
       SELECT
         kdsls,
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN skala_usaha = 'UM'  AND status_pencacahan = 'selesai' THEN 1 ELSE 0 END) AS um_done,
         SUM(CASE WHEN skala_usaha = 'UB'  AND status_pencacahan = 'selesai' THEN 1 ELSE 0 END) AS ub_done
       FROM usaha
-      WHERE CONCAT(kdprov, kdkab, kdkec, kddesa) = ?
+      WHERE (kddesa = ? OR CONCAT(kdkec, kddesa) = ?)
     `
     if (skalaFilter) {
       sql += ' AND skala_usaha = ?'
@@ -104,7 +105,8 @@ export async function GET(req: NextRequest) {
       // - Kalau panjang < 4 → padStart('0').
       const rawKdsls = String(r.kdsls ?? '')
       const kdslsLocal = rawKdsls.length >= 14 ? rawKdsls.slice(-4) : rawKdsls.padStart(4, '0')
-      const idsls = `${r.kdprov}${r.kdkab}${r.kdkec}${r.kddesa}${kdslsLocal}`
+      // Semua row di query ini milik 1 desa → idsls = iddesa(10) + kdsls(4) = 14 digit (cocok geojson).
+      const idsls = `${iddesa}${kdslsLocal}`
       return {
         idsls,
         kdsls: kdslsLocal,
