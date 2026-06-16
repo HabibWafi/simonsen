@@ -72,6 +72,7 @@ export default function MapKecamatan({ data, geoJson, onKecClick, activeKec, ska
             realisasi: d.realisasi,
             persentase: d.persentase,
             breakdown: d.breakdown ?? undefined,
+            fasih: (d as any).fasih ?? undefined,
             skalaFilter,
           })}
           <div style="font-size:10px;color:#8C7B6B;margin-top:8px;border-top:1px dashed #ddd;padding-top:6px">Klik untuk drill-down ke desa →</div>

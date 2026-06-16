@@ -219,6 +219,10 @@ async function main() {
     await runSqlFile(root, 'db/seed/iterasi9.sql', 'posts + tim_se')
   } catch (e) { warn(`Seed iterasi9: ${e.message}`) }
 
+  // 6c. Migration iterasi 16 (tabel rekap progress Fasih)
+  info('Apply migration iterasi 16 (fasih_*)…')
+  await runMigrationFile(root, 'db/migrations/2026_se2026_iterasi16.sql')
+
   // 7. Verify
   const [[counts]] = await root.query(`
     SELECT

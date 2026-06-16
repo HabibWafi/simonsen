@@ -7,12 +7,20 @@
  */
 import type { ProgressBreakdown, SkalaUsaha } from '@/types'
 
+export interface FasihInfo {
+  open: number; draft: number; submitted: number
+  approved: number; rejected: number
+  selesai_cacah: number; pct_cacah: number
+  selesai_approve: number; pct_approve: number
+}
+
 interface Props {
   nama: string
   target: number
   realisasi: number
   persentase: number
   breakdown?: ProgressBreakdown
+  fasih?: FasihInfo | null     // data scraper Fasih (prioritas di atas breakdown skala)
   skalaFilter?: SkalaUsaha | ''  // '' = semua
   compact?: boolean
 }
@@ -24,13 +32,23 @@ const SKALA_LABEL: Record<SkalaUsaha, string> = {
 }
 
 export function buildKecamatanTooltipHtml({
-  nama, target, realisasi, persentase, breakdown, skalaFilter = '',
+  nama, target, realisasi, persentase, breakdown, fasih, skalaFilter = '',
 }: Omit<Props, 'compact'>): string {
   const skalaLabel = skalaFilter ? ` <span style="font-weight:500;opacity:.7;font-size:10px">[${skalaFilter}]</span>` : ''
   let body = `<div style="font-size:12px;line-height:1.55">
     Target: <b>${target.toLocaleString('id-ID')}</b> usaha${skalaLabel}<br>
-    Realisasi: <b>${realisasi.toLocaleString('id-ID')}</b> (${persentase.toFixed(1)}%)
+    Selesai cacah: <b>${realisasi.toLocaleString('id-ID')}</b> (${persentase.toFixed(1)}%)
   </div>`
+
+  if (fasih) {
+    body += `<div style="border-top:1px solid rgba(0,0,0,.08);margin-top:8px;padding-top:8px;font-size:11px;line-height:1.7">
+      <div style="display:flex;justify-content:space-between;gap:12px"><span style="opacity:.7">✓ Approved</span><span><b>${fasih.selesai_approve.toLocaleString('id-ID')}</b> <span style="opacity:.7">(${fasih.pct_approve.toFixed(1)}%)</span></span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px"><span style="opacity:.7">Open / Draft</span><span>${fasih.open.toLocaleString('id-ID')} / ${fasih.draft.toLocaleString('id-ID')}</span></div>
+      <div style="display:flex;justify-content:space-between;gap:12px"><span style="opacity:.7">Submitted</span><span>${fasih.submitted.toLocaleString('id-ID')}</span></div>
+      ${fasih.rejected ? `<div style="display:flex;justify-content:space-between;gap:12px"><span style="opacity:.7;color:#E8192C">Rejected</span><span style="color:#E8192C">${fasih.rejected.toLocaleString('id-ID')}</span></div>` : ''}
+    </div>`
+    return `<div><div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#1A1A1A">${nama}</div>${body}</div>`
+  }
 
   if (!skalaFilter && breakdown) {
     body += `<div style="border-top:1px solid rgba(0,0,0,.08);margin-top:8px;padding-top:8px;font-size:11px;line-height:1.7">`
@@ -50,15 +68,22 @@ export function buildKecamatanTooltipHtml({
 }
 
 export default function KecamatanTooltip(p: Props) {
-  const { nama, target, realisasi, persentase, breakdown, skalaFilter = '', compact } = p
+  const { nama, target, realisasi, persentase, breakdown, fasih, skalaFilter = '', compact } = p
   return (
     <div style={{ fontSize: compact ? 11 : 12, lineHeight: 1.55, minWidth: 200 }}>
       <div style={{ fontWeight: 700, fontSize: compact ? 12 : 13, marginBottom: 4, color: '#1A1A1A' }}>{nama}</div>
       <div>
         Target: <b>{target.toLocaleString('id-ID')}</b> usaha{skalaFilter && <span style={{ opacity: .7, fontSize: 10 }}> [{skalaFilter}]</span>}<br />
-        Realisasi: <b>{realisasi.toLocaleString('id-ID')}</b> ({persentase.toFixed(1)}%)
+        Selesai cacah: <b>{realisasi.toLocaleString('id-ID')}</b> ({persentase.toFixed(1)}%)
       </div>
-      {!skalaFilter && breakdown && (
+      {fasih ? (
+        <div style={{ borderTop: '1px solid rgba(0,0,0,.08)', marginTop: 8, paddingTop: 8, fontSize: 11, lineHeight: 1.7 }}>
+          <Row label="✓ Approved" value={`${fasih.selesai_approve.toLocaleString('id-ID')} (${fasih.pct_approve.toFixed(1)}%)`} />
+          <Row label="Open / Draft" value={`${fasih.open.toLocaleString('id-ID')} / ${fasih.draft.toLocaleString('id-ID')}`} />
+          <Row label="Submitted" value={fasih.submitted.toLocaleString('id-ID')} />
+          {fasih.rejected > 0 && <Row label="Rejected" value={fasih.rejected.toLocaleString('id-ID')} danger />}
+        </div>
+      ) : !skalaFilter && breakdown && (
         <div style={{ borderTop: '1px solid rgba(0,0,0,.08)', marginTop: 8, paddingTop: 8, fontSize: 11, lineHeight: 1.7 }}>
           {(['UMK','UM','UB'] as SkalaUsaha[]).map(k => {
             const b = breakdown[k]
@@ -71,11 +96,20 @@ export default function KecamatanTooltip(p: Props) {
           })}
         </div>
       )}
-      {skalaFilter && (
+      {!fasih && skalaFilter && (
         <div style={{ borderTop: '1px solid rgba(0,0,0,.08)', marginTop: 8, paddingTop: 6, fontSize: 10, opacity: .65, fontStyle: 'italic' }}>
           Hanya menampilkan skala {skalaFilter}
         </div>
       )}
+    </div>
+  )
+}
+
+function Row({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+      <span style={{ opacity: .7, color: danger ? '#E8192C' : undefined }}>{label}</span>
+      <span style={{ color: danger ? '#E8192C' : undefined }}><b>{value}</b></span>
     </div>
   )
 }

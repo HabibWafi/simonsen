@@ -114,6 +114,7 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
             realisasi: d.realisasi,
             persentase: d.persentase,
             breakdown: d.breakdown ?? undefined,
+            fasih: (d as any).fasih ?? undefined,
             skalaFilter: skala,
           })}
           ${drillHint}

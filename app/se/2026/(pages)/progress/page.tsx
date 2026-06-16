@@ -283,20 +283,20 @@ export default function ProgressPage() {
                 let label = ''
                 if (selectedSls) {
                   const s = slsOptions.find((o: any) => o.idsls === selectedSls.idsls)
-                  if (s) { info = { target: s.target_usaha, realisasi: s.realisasi, persentase: s.persentase, breakdown: s.breakdown }; label = `SLS ${s.nmsls || selectedSls.idsls.slice(-4)}` }
+                  if (s) { info = { target: s.target_usaha, realisasi: s.realisasi, persentase: s.persentase, breakdown: s.breakdown, fasih: (s as any).fasih }; label = `SLS ${s.nmsls || selectedSls.idsls.slice(-4)}` }
                 } else if (drilledDesa) {
                   const d = desaOptions.find((o: any) => o.iddesa === drilledDesa.iddesa)
-                  if (d) { info = { target: d.target, realisasi: d.realisasi, persentase: d.persentase, breakdown: d.breakdown }; label = `Desa ${d.nmdesa}` }
+                  if (d) { info = { target: d.target, realisasi: d.realisasi, persentase: d.persentase, breakdown: d.breakdown, fasih: (d as any).fasih }; label = `Desa ${d.nmdesa}` }
                 } else if (drilledKec) {
                   const k: any = progress.find((p: any) => String(p.kdkec ?? '') === drilledKec.kdkec)
-                  if (k) { info = { target: k.target_usaha, realisasi: k.realisasi, persentase: k.persentase, breakdown: k.breakdown }; label = k.nmkec ?? k.kecamatan }
+                  if (k) { info = { target: k.target_usaha, realisasi: k.realisasi, persentase: k.persentase, breakdown: k.breakdown, fasih: (k as any).fasih }; label = k.nmkec ?? k.kecamatan }
                 }
                 return (
                   <div style={{ marginTop: 14, padding: 16, background: 'white', borderRadius: 12, border: '1px solid #EDE3D8' }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase' as const, letterSpacing: .5, marginBottom: 10 }}>Detail Wilayah</div>
                     {info ? (
                       <>
-                        <KecamatanTooltip nama={label} target={info.target} realisasi={info.realisasi} persentase={info.persentase} breakdown={info.breakdown ?? undefined} skalaFilter={skala} />
+                        <KecamatanTooltip nama={label} target={info.target} realisasi={info.realisasi} persentase={info.persentase} breakdown={info.breakdown ?? undefined} fasih={info.fasih ?? undefined} skalaFilter={skala} />
                         <div style={{ marginTop: 10, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${info.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
                         </div>

@@ -107,6 +107,7 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
             realisasi: d.realisasi,
             persentase: d.persentase,
             breakdown: d.breakdown ?? undefined,
+            fasih: (d as any).fasih ?? undefined,
             skalaFilter: skala,
           })}
         </div>`

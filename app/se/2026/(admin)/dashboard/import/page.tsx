@@ -30,7 +30,7 @@ interface HistoryRow {
 }
 
 export default function ImportPage() {
-  const [tab, setTab] = useState<'usaha' | 'progress'>('usaha')
+  const [tab, setTab] = useState<'usaha' | 'progress' | 'fasih'>('usaha')
   const refreshHistoryRef = useRef<() => void>(() => {})
 
   const onSuccess = useCallback(() => {
@@ -48,10 +48,13 @@ export default function ImportPage() {
 
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #EDE3D8' }}>
         <TabButton active={tab === 'usaha'} onClick={() => setTab('usaha')}>📦 Master Usaha</TabButton>
-        <TabButton active={tab === 'progress'} onClick={() => setTab('progress')}>📊 Update Progress</TabButton>
+        <TabButton active={tab === 'progress'} onClick={() => setTab('progress')}>📊 Update Progress (per IDSBR)</TabButton>
+        <TabButton active={tab === 'fasih'} onClick={() => setTab('fasih')}>🤖 Progress Fasih (Scraper)</TabButton>
       </div>
 
-      {tab === 'usaha' ? (
+      {tab === 'fasih' ? (
+        <FasihImportCard />
+      ) : tab === 'usaha' ? (
         <ImportCard
           key="usaha"
           title="Import Master Daftar Usaha"
@@ -77,6 +80,63 @@ export default function ImportPage() {
       )}
 
       <HistoryTable refreshRef={refreshHistoryRef} />
+    </div>
+  )
+}
+
+/* ---------- FasihImportCard (upload xlsx scraper langsung) ---------- */
+
+function FasihImportCard() {
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<any>(null)
+  const [error, setError] = useState('')
+
+  async function submit() {
+    if (!file) return
+    setBusy(true); setError(''); setResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/import/fasih', { method: 'POST', body: fd })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j.error ?? 'Import gagal')
+      setResult(j)
+    } catch (e: any) { setError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', padding: 24, marginBottom: 24 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 800, color: '#1A1A1A', margin: '0 0 4px' }}>Import Progress Fasih (hasil scraper)</h2>
+      <p style={{ fontSize: 13, color: '#6B6B6B', margin: '0 0 16px', lineHeight: 1.6 }}>
+        Upload file <code>progres_subsls_*.xlsx</code> dari bot scraper. Sheet yang dibaca: Rekap Kecamatan/Desa/SLS, Detail SUBSLS, Progress Petugas & Pengawas.
+        Data agregat ini meng-update progress peta + per-petugas (idempotent, upsert per wilayah).
+        <br /><strong>Untuk update otomatis berkala</strong>, bot sebaiknya kirim JSON ke <code>POST /api/se/2026/external/fasih</code> (lebih cepat) — lihat docs API.
+      </p>
+
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="file" accept=".xlsx,.xls" onChange={e => setFile(e.target.files?.[0] ?? null)} style={{ fontSize: 13 }} />
+        <button onClick={submit} disabled={!file || busy} style={{
+          padding: '10px 20px', borderRadius: 8, background: !file || busy ? '#E0D5C8' : '#E8751A',
+          color: 'white', border: 'none', fontSize: 13, fontWeight: 700, cursor: !file || busy ? 'default' : 'pointer',
+        }}>{busy ? 'Memproses…' : 'Upload & Ingest'}</button>
+      </div>
+
+      {error && <div style={{ marginTop: 14, background: '#FFF1F2', border: '1px solid #FECDD3', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#E8192C' }}>{error}</div>}
+
+      {result?.ok && (
+        <div style={{ marginTop: 16, background: '#E8FFF3', border: '1px solid #A7F3D0', borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#00A651', marginBottom: 10 }}>✓ Snapshot #{result.snapshot_id} berhasil di-ingest</div>
+          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+            {Object.entries(result.counts ?? {}).map(([k, v]) => (
+              <div key={k} style={{ fontSize: 12, color: '#3D3D3D' }}>
+                <span style={{ fontWeight: 700, color: '#C85E0A', textTransform: 'capitalize' }}>{k}</span>: {String(v)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

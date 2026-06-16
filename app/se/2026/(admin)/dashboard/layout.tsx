@@ -24,6 +24,7 @@ const menuItems: MenuItem[] = [
   { href: BASE,                  label: 'Dashboard',        icon: '📊', roles: ['admin', 'koordinator', 'petugas'] },
   { href: `${BASE}/progress`,    label: 'Peta Wilayah',     icon: '🗺️', roles: ['admin', 'koordinator', 'petugas'] },
   { href: `${BASE}/usaha`,       label: 'Daftar Usaha',     icon: '🏪', roles: ['admin', 'koordinator', 'petugas'] },
+  { href: `${BASE}/petugas`,     label: 'Progress Petugas', icon: '🧑‍🌾', roles: ['admin', 'koordinator'] },
   { href: `${BASE}/import`,      label: 'Import Data',      icon: '⬆️', roles: ['admin', 'koordinator'] },
   { href: `${BASE}/tahapan`,     label: 'Kelola Tahapan',   icon: '📅', roles: ['admin'] },
   { href: `${BASE}/sosialisasi`, label: 'Kelola Sosialisasi', icon: '📰', roles: ['admin', 'koordinator'] },

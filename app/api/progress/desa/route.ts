@@ -2,72 +2,87 @@ import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 
 /**
- * GET /api/progress/desa?kec=1605030&skala=UMK
- * Returns aggregate per-desa untuk kecamatan tertentu.
- * Saat skala kosong → sertakan breakdown 3-skala per desa.
+ * GET /api/progress/desa?kec=<kode_kec 7-digit>
+ * Agregat per-desa. Sumber utama fasih_desa; fallback agregasi usaha.
  */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const kdkec = url.searchParams.get('kec')
   const skala = url.searchParams.get('skala')
   const skalaFilter = skala && ['UMK', 'UM', 'UB'].includes(skala) ? skala : null
+  if (!kdkec) return NextResponse.json({ error: 'Param `kec` wajib' }, { status: 400 })
 
-  if (!kdkec) {
-    return NextResponse.json({ error: 'Param `kec` (kdkec) wajib' }, { status: 400 })
-  }
+  const pct = (a: number, t: number) => t > 0 ? Math.round((a / t) * 1000) / 10 : 0
 
   try {
+    const [fasih] = await pool.execute(
+      `SELECT kode_desa, kode_kec, total, open, draft, submitted_pencacah, approved, rejected,
+              selesai_cacah, selesai_approve
+       FROM fasih_desa WHERE kode_kec = ? ORDER BY selesai_cacah DESC`,
+      [kdkec],
+    ) as [any[], any]
+
+    if (fasih.length > 0) {
+      // nama desa dari fasih_subsls (sumber Fasih) atau tabel desa
+      const [namaRows] = await pool.execute(
+        `SELECT kode_desa, MAX(nama_desa) AS nm FROM fasih_subsls WHERE kode_kec = ? GROUP BY kode_desa`, [kdkec],
+      ) as [any[], any]
+      const nm = new Map<string, string>()
+      for (const r of namaRows) if (r.nm) nm.set(String(r.kode_desa), r.nm)
+
+      const data = fasih.map((r: any) => {
+        const total = Number(r.total), cacah = Number(r.selesai_cacah), approve = Number(r.selesai_approve)
+        return {
+          kddesa: r.kode_desa,
+          iddesa: r.kode_desa,
+          nmdesa: nm.get(String(r.kode_desa)) ?? String(r.kode_desa),
+          kdkec: r.kode_kec,
+          target_usaha: total,
+          realisasi: cacah,
+          persentase: pct(cacah, total),
+          breakdown: null,
+          fasih: {
+            open: Number(r.open), draft: Number(r.draft), submitted: Number(r.submitted_pencacah),
+            approved: Number(r.approved), rejected: Number(r.rejected),
+            selesai_cacah: cacah, pct_cacah: pct(cacah, total),
+            selesai_approve: approve, pct_approve: pct(approve, total),
+          },
+        }
+      })
+      return NextResponse.json({ data, source: 'fasih' })
+    }
+
+    // ---- Fallback usaha ----
     const params: any[] = [kdkec]
     let sql = `
-      SELECT
-        kddesa,
-        nmdesa,
-        kdkec,
+      SELECT kddesa, MAX(nmdesa) AS nmdesa, kdkec,
         COUNT(*) AS target_usaha,
-        SUM(CASE WHEN status_pencacahan = 'selesai' THEN 1 ELSE 0 END) AS realisasi,
-        SUM(CASE WHEN skala_usaha = 'UMK' THEN 1 ELSE 0 END) AS umk_target,
-        SUM(CASE WHEN skala_usaha = 'UM'  THEN 1 ELSE 0 END) AS um_target,
-        SUM(CASE WHEN skala_usaha = 'UB'  THEN 1 ELSE 0 END) AS ub_target,
-        SUM(CASE WHEN skala_usaha = 'UMK' AND status_pencacahan = 'selesai' THEN 1 ELSE 0 END) AS umk_done,
-        SUM(CASE WHEN skala_usaha = 'UM'  AND status_pencacahan = 'selesai' THEN 1 ELSE 0 END) AS um_done,
-        SUM(CASE WHEN skala_usaha = 'UB'  AND status_pencacahan = 'selesai' THEN 1 ELSE 0 END) AS ub_done
-      FROM usaha
-      WHERE kdkec = ?
-    `
-    if (skalaFilter) {
-      sql += ' AND skala_usaha = ?'
-      params.push(skalaFilter)
-    }
-    sql += ' GROUP BY kddesa, nmdesa, kdkec ORDER BY realisasi DESC'
-
+        SUM(CASE WHEN status_pencacahan='selesai' THEN 1 ELSE 0 END) AS realisasi,
+        SUM(CASE WHEN skala_usaha='UMK' THEN 1 ELSE 0 END) AS umk_target,
+        SUM(CASE WHEN skala_usaha='UM'  THEN 1 ELSE 0 END) AS um_target,
+        SUM(CASE WHEN skala_usaha='UB'  THEN 1 ELSE 0 END) AS ub_target,
+        SUM(CASE WHEN skala_usaha='UMK' AND status_pencacahan='selesai' THEN 1 ELSE 0 END) AS umk_done,
+        SUM(CASE WHEN skala_usaha='UM'  AND status_pencacahan='selesai' THEN 1 ELSE 0 END) AS um_done,
+        SUM(CASE WHEN skala_usaha='UB'  AND status_pencacahan='selesai' THEN 1 ELSE 0 END) AS ub_done
+      FROM usaha WHERE kdkec = ?`
+    if (skalaFilter) { sql += ' AND skala_usaha = ?'; params.push(skalaFilter) }
+    sql += ' GROUP BY kddesa, kdkec ORDER BY realisasi DESC'
     const [rows] = await pool.execute(sql, params) as [any[], any]
-
-    const pct = (real: number, t: number) => t > 0 ? Math.round((real / t) * 1000) / 10 : 0
     const data = rows.map((r: any) => {
-      const target = Number(r.target_usaha)
-      const real = Number(r.realisasi)
-      const umkT = Number(r.umk_target), umkD = Number(r.umk_done)
-      const umT  = Number(r.um_target),  umD  = Number(r.um_done)
-      const ubT  = Number(r.ub_target),  ubD  = Number(r.ub_done)
-      // iddesa kanonik 10-digit (kddesa sudah 10-digit di data; fallback kdkec+kddesa).
+      const target = Number(r.target_usaha), real = Number(r.realisasi)
       const kddesaStr = String(r.kddesa ?? '')
       const iddesa = kddesaStr.length >= 10 ? kddesaStr : `${r.kdkec ?? ''}${kddesaStr}`
       return {
-        kddesa: r.kddesa,
-        iddesa,
-        nmdesa: r.nmdesa,
-        kdkec: r.kdkec,
-        target_usaha: target,
-        realisasi: real,
-        persentase: pct(real, target),
+        kddesa: r.kddesa, iddesa, nmdesa: r.nmdesa, kdkec: r.kdkec,
+        target_usaha: target, realisasi: real, persentase: pct(real, target),
         breakdown: skalaFilter ? null : {
-          UMK: { target: umkT, realisasi: umkD, persentase: pct(umkD, umkT) },
-          UM:  { target: umT,  realisasi: umD,  persentase: pct(umD,  umT) },
-          UB:  { target: ubT,  realisasi: ubD,  persentase: pct(ubD,  ubT) },
+          UMK: { target: Number(r.umk_target), realisasi: Number(r.umk_done), persentase: pct(Number(r.umk_done), Number(r.umk_target)) },
+          UM:  { target: Number(r.um_target),  realisasi: Number(r.um_done),  persentase: pct(Number(r.um_done),  Number(r.um_target)) },
+          UB:  { target: Number(r.ub_target),  realisasi: Number(r.ub_done),  persentase: pct(Number(r.ub_done),  Number(r.ub_target)) },
         },
       }
     })
-    return NextResponse.json({ data })
+    return NextResponse.json({ data, source: 'usaha' })
   } catch (e: any) {
     return NextResponse.json({ data: [], error: e.message }, { status: 500 })
   }

@@ -65,7 +65,52 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Param `desa` harus 10 digit numeric (iddesa)' }, { status: 400 })
   }
 
+  const pctF = (a: number, t: number) => t > 0 ? Math.round((a / t) * 1000) / 10 : 0
+
   try {
+    // ---- Sumber utama: fasih_sls ----
+    const [fasihRows] = await pool.execute(
+      `SELECT kode_sls, total, open, draft, submitted_pencacah, approved, rejected,
+              selesai_cacah, selesai_approve
+       FROM fasih_sls WHERE kode_desa = ? ORDER BY selesai_cacah DESC`,
+      [iddesa],
+    ) as [any[], any]
+
+    if (fasihRows.length > 0) {
+      // nama SLS dari fasih_subsls (Fasih) atau geojson
+      const [nmRows] = await pool.execute(
+        `SELECT kode_sls, MAX(nama_sls) AS nm FROM fasih_subsls WHERE kode_desa = ? GROUP BY kode_sls`, [iddesa],
+      ) as [any[], any]
+      const nmMap = new Map<string, string>()
+      for (const r of nmRows) if (r.nm) nmMap.set(String(r.kode_sls), r.nm)
+
+      const data = fasihRows.map((r: any) => {
+        const total = Number(r.total), cacah = Number(r.selesai_cacah), approve = Number(r.selesai_approve)
+        const kode = String(r.kode_sls)
+        return {
+          idsls: kode,
+          kdsls: kode.slice(-4),
+          nmsls: nmMap.get(kode) ?? '',
+          target_usaha: total,
+          realisasi: cacah,
+          persentase: pctF(cacah, total),
+          breakdown: null,
+          fasih: {
+            open: Number(r.open), draft: Number(r.draft), submitted: Number(r.submitted_pencacah),
+            approved: Number(r.approved), rejected: Number(r.rejected),
+            selesai_cacah: cacah, pct_cacah: pctF(cacah, total),
+            selesai_approve: approve, pct_approve: pctF(approve, total),
+          },
+        }
+      })
+      const body: any = { data, source: 'fasih' }
+      if (includeGeo) body.geojson = buildGeoJson(iddesa)
+      return NextResponse.json(body, {
+        headers: { 'Cache-Control': 'public, max-age=120, s-maxage=300, stale-while-revalidate=60' },
+      })
+    }
+
+    // ---- Fallback: agregasi usaha ----
     // Filter tahan format kddesa: 10-digit (kddesa = iddesa) atau 3-digit (kdkec+kddesa).
     const params: any[] = [iddesa, iddesa]
     let sql = `

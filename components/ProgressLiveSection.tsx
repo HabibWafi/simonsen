@@ -141,8 +141,8 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
   const isMobile = useIsMobile()
 
   // Dropdown data: desa list per kec (lazy fetch), SLS list per desa (lazy fetch)
-  const [desaOptions, setDesaOptions] = useState<Array<{ iddesa: string; nmdesa: string; target: number; realisasi: number; persentase: number; breakdown?: ProgressBreakdown | null }>>([])
-  const [slsOptions, setSlsOptions] = useState<Array<{ idsls: string; nmsls: string; target_usaha: number; realisasi: number; persentase: number; breakdown?: ProgressBreakdown | null }>>([])
+  const [desaOptions, setDesaOptions] = useState<Array<{ iddesa: string; nmdesa: string; target: number; realisasi: number; persentase: number; breakdown?: ProgressBreakdown | null; fasih?: any }>>([])
+  const [slsOptions, setSlsOptions] = useState<Array<{ idsls: string; nmsls: string; target_usaha: number; realisasi: number; persentase: number; breakdown?: ProgressBreakdown | null; fasih?: any }>>([])
 
   // Fetch desa options saat kec dipilih (dropdown).
   useEffect(() => {
@@ -157,6 +157,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
           realisasi: Number(d.realisasi ?? 0),
           persentase: Number(d.persentase ?? 0),
           breakdown: d.breakdown ?? null,
+          fasih: d.fasih ?? null,
         }))
         setDesaOptions(list)
       })
@@ -574,7 +575,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
                     const s = slsOptions.find(o => o.idsls === selectedSls.idsls)
                     if (s) return (
                       <>
-                        <KecamatanTooltip nama={`SLS ${s.nmsls || selectedSls.idsls.slice(-4)}`} target={s.target_usaha} realisasi={s.realisasi} persentase={s.persentase} breakdown={s.breakdown ?? undefined} skalaFilter={skalaFilter} />
+                        <KecamatanTooltip nama={`SLS ${s.nmsls || selectedSls.idsls.slice(-4)}`} target={s.target_usaha} realisasi={s.realisasi} persentase={s.persentase} breakdown={s.breakdown ?? undefined} fasih={(s as any).fasih ?? undefined} skalaFilter={skalaFilter} />
                         <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${s.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
                         </div>
@@ -585,7 +586,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
                     const d = desaOptions.find(o => o.iddesa === drillDesa.iddesa)
                     if (d) return (
                       <>
-                        <KecamatanTooltip nama={`Desa ${d.nmdesa}`} target={d.target} realisasi={d.realisasi} persentase={d.persentase} breakdown={d.breakdown ?? undefined} skalaFilter={skalaFilter} />
+                        <KecamatanTooltip nama={`Desa ${d.nmdesa}`} target={d.target} realisasi={d.realisasi} persentase={d.persentase} breakdown={d.breakdown ?? undefined} fasih={(d as any).fasih ?? undefined} skalaFilter={skalaFilter} />
                         <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${d.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
                         </div>
@@ -594,7 +595,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
                   }
                   if (selected) return (
                     <>
-                      <KecamatanTooltip nama={selected.kecamatan ?? (selected as any).nmkec ?? '-'} target={selected.target_usaha} realisasi={selected.realisasi} persentase={selected.persentase} breakdown={selected.breakdown ?? undefined} skalaFilter={skalaFilter} />
+                      <KecamatanTooltip nama={selected.kecamatan ?? (selected as any).nmkec ?? '-'} target={selected.target_usaha} realisasi={selected.realisasi} persentase={selected.persentase} breakdown={selected.breakdown ?? undefined} fasih={(selected as any).fasih ?? undefined} skalaFilter={skalaFilter} />
                       <div style={{ marginTop: 14, height: 8, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${selected.persentase}%`, borderRadius: 99, background: 'linear-gradient(90deg, #E8751A, #F5A623)' }} />
                       </div>
