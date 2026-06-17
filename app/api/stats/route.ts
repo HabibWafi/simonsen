@@ -18,12 +18,20 @@ export async function GET() {
       ) as [any[], any]
       const [[ds]] = await pool.execute(`SELECT COUNT(*) AS desa_count FROM fasih_desa`) as [any[], any]
       // Waktu data terakhir di-ingest dari bot (bukan waktu fetch client).
+      // Pakai epoch absolut (UNIX_TIMESTAMP), lalu format ke WIB di Node →
+      // benar walau timezone server/DB beda (mis. Hostinger UTC).
       const [[snap]] = await pool.execute(
         `SELECT UNIX_TIMESTAMP(MAX(created_at)) AS last_unix,
-                DATE_FORMAT(MAX(created_at), '%d %b %Y %H:%i:%s') AS last_str,
                 (SELECT snapshot_ts FROM fasih_snapshot ORDER BY id DESC LIMIT 1) AS snapshot_ts
          FROM fasih_snapshot`,
       ) as [any[], any]
+      const lastUnix = snap?.last_unix ? Number(snap.last_unix) : null
+      const lastStr = lastUnix
+        ? new Intl.DateTimeFormat('id-ID', {
+            timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+          }).format(new Date(lastUnix * 1000)) + ' WIB'
+        : null
       const total_target = Number(fk.total_target), total_realisasi = Number(fk.total_realisasi)
       return NextResponse.json({
         total_target,
@@ -34,8 +42,8 @@ export async function GET() {
         desa_count:      Number(ds?.desa_count) ?? 0,
         petugas_aktif:   Number(pet?.petugas_aktif) ?? 0,
         hari_tersisa:    hitungHariTersisa(),
-        last_ingest_unix: snap?.last_unix ? Number(snap.last_unix) : null,
-        last_ingest_str:  snap?.last_str ?? null,
+        last_ingest_unix: lastUnix,
+        last_ingest_str:  lastStr,
         snapshot_ts:      snap?.snapshot_ts ?? null,
         source: 'fasih',
       }, { headers: { 'Cache-Control': 'no-store' } })
