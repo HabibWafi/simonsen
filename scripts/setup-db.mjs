@@ -223,6 +223,10 @@ async function main() {
   info('Apply migration iterasi 16 (fasih_*)…')
   await runMigrationFile(root, 'db/migrations/2026_se2026_iterasi16.sql')
 
+  // 6d. Migration iterasi 18 (snapshot progress harian petugas)
+  info('Apply migration iterasi 18 (fasih_petugas_harian)…')
+  await runMigrationFile(root, 'db/migrations/2026_se2026_iterasi18.sql')
+
   // 7. Verify
   const [[counts]] = await root.query(`
     SELECT

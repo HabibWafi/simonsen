@@ -215,6 +215,28 @@ export async function ingestFasih(
       counts.pengawas = await chunkedUpsert(conn, 'fasih_pengawas', cols, rows, cols.slice(1))
     }
 
+    // 8. Snapshot cumulative HARIAN per (pencacah, kode_kec) untuk tanggal WIB hari ini.
+    //    Dipanggil jika subsls ter-update (sumber petugas↔wilayah). Cron-free:
+    //    baris hari ini selalu di-refresh ke cumulative terbaru → delta vs hari
+    //    sebelumnya = progress harian.
+    if (Array.isArray(payload.subsls) && payload.subsls.length > 0) {
+      const tglWib = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date()) // YYYY-MM-DD
+      await conn.execute(
+        `INSERT INTO fasih_petugas_harian (tanggal, pencacah, kode_kec, nama_ppl, nama_pml, total, cum_cacah, cum_approve)
+         SELECT ?, pencacah, kode_kec, MAX(nama_ppl), MAX(nama_pml),
+                SUM(total), SUM(selesai_cacah), SUM(selesai_approve)
+         FROM fasih_subsls
+         WHERE pencacah IS NOT NULL AND pencacah <> ''
+         GROUP BY pencacah, kode_kec
+         ON DUPLICATE KEY UPDATE
+           nama_ppl = VALUES(nama_ppl), nama_pml = VALUES(nama_pml),
+           total = VALUES(total), cum_cacah = VALUES(cum_cacah), cum_approve = VALUES(cum_approve)`,
+        [tglWib],
+      )
+    }
+
     await conn.execute(`UPDATE fasih_snapshot SET rows_total = ? WHERE id = ?`,
       [Object.values(counts).reduce((a, b) => a + b, 0), snapshotId])
 

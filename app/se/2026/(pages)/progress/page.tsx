@@ -9,6 +9,9 @@ import KecamatanTooltip from '@/components/KecamatanTooltip'
 import LiveUpdateBadge from '@/components/LiveUpdateBadge'
 import { withBase } from '@/lib/basePath'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { exportCsv as exportCsvFile, exportTablePng } from '@/lib/exportTable'
+
+const PetugasHarianSection = dynamic(() => import('@/components/PetugasHarianSection'), { ssr: false })
 
 const MapKecamatan = dynamic(() => import('@/components/MapKecamatan'), {
   ssr: false,
@@ -30,6 +33,10 @@ const mobSelectStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #EDE3D8',
   background: 'white', fontSize: 13, fontWeight: 700, color: '#3D3D3D',
   cursor: 'pointer', outline: 'none',
+}
+const exBtn: React.CSSProperties = {
+  padding: '8px 12px', borderRadius: 8, border: '1.5px solid #E8751A', background: 'transparent',
+  color: '#E8751A', fontSize: 12, fontWeight: 700, cursor: 'pointer',
 }
 
 const SKALA_OPTS: { v: Skala; label: string; color: string }[] = [
@@ -55,6 +62,45 @@ export default function ProgressPage() {
   const [petugasKec, setPetugasKec] = useState('')
   const [petugasKecList, setPetugasKecList] = useState<any[]>([])
   const [petugasQ, setPetugasQ] = useState('')
+  const [harianFocus, setHarianFocus] = useState<{ kec: string; nama: string; nonce: number }>({ kec: '', nama: '', nonce: 0 })
+
+  const filteredPetugas = petugas.filter((p: any) => !petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase()))
+
+  function exportPetugasCsv() {
+    const headers = ['No', 'Petugas (PPL)', 'Pengawas (PML)', ...(petugasKec ? ['Kecamatan'] : []), 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress %']
+    const rows = filteredPetugas.map((p: any, i: number) => [i + 1, p.nama_ppl, p.nama_pml, ...(petugasKec ? [p.nmkec] : []), p.total, p.draft ?? 0, p.selesai_cacah, p.selesai_approve, p.pct_cacah.toFixed(1)])
+    const kecLbl = petugasKecList.find((k: any) => k.kode_kec === petugasKec)?.nmkec
+    exportCsvFile(`progress-petugas${kecLbl ? '-' + kecLbl : ''}.csv`, headers, rows as any)
+  }
+  function exportPetugasPng() {
+    const num = (v: number) => Number(v).toLocaleString('id-ID')
+    const kecLbl = petugasKecList.find((k: any) => k.kode_kec === petugasKec)?.nmkec
+    const cols = [
+      { label: 'No', width: 40, align: 'right' as const },
+      { label: 'Petugas (PPL)', width: 200 },
+      { label: 'Pengawas (PML)', width: 170 },
+      ...(petugasKec ? [{ label: 'Kecamatan', width: 150 }] : []),
+      { label: 'Target', width: 70, align: 'right' as const },
+      { label: 'Draft', width: 60, align: 'right' as const, color: () => '#1877F2' },
+      { label: 'Cacah', width: 70, align: 'right' as const, color: () => '#C85E0A' },
+      { label: 'Approved', width: 80, align: 'right' as const, color: () => '#00A651' },
+      { label: 'Progress', width: 80, align: 'right' as const },
+    ]
+    const rows = filteredPetugas.map((p: any, i: number) => ({ ...p, _no: i + 1 }))
+    exportTablePng({
+      filename: `progress-petugas${kecLbl ? '-' + kecLbl : ''}.png`,
+      title: 'Progress Petugas Pencacah SE2026',
+      subtitle: `${kecLbl ? 'Kecamatan ' + kecLbl : 'Seluruh Kecamatan'} · ${filteredPetugas.length} petugas`,
+      columns: cols,
+      rows,
+      cell: (p: any, ci: number) => {
+        const base = petugasKec
+          ? [String(p._no), p.nama_ppl, p.nama_pml, p.nmkec, num(p.total), num(p.draft ?? 0), num(p.selesai_cacah), num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
+          : [String(p._no), p.nama_ppl, p.nama_pml, num(p.total), num(p.draft ?? 0), num(p.selesai_cacah), num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
+        return base[ci]
+      },
+    })
+  }
 
   const [desaOptions, setDesaOptions] = useState<any[]>([])
   const [slsOptions, setSlsOptions] = useState<any[]>([])
@@ -436,25 +482,25 @@ export default function ProgressPage() {
                   <option value="">🗺️ Semua Kecamatan</option>
                   {petugasKecList.map((k: any) => <option key={k.kode_kec} value={k.kode_kec}>{k.nmkec}</option>)}
                 </select>
-                <input value={petugasQ} onChange={e => setPetugasQ(e.target.value)} placeholder="Cari nama…" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, outline: 'none', width: 150 }} />
+                <input value={petugasQ} onChange={e => setPetugasQ(e.target.value)} placeholder="Cari nama…" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, outline: 'none', width: 140 }} />
+                <button onClick={exportPetugasCsv} disabled={!filteredPetugas.length} style={exBtn}>⬇ CSV</button>
+                <button onClick={exportPetugasPng} disabled={!filteredPetugas.length} style={exBtn}>🖼️ PNG</button>
               </div>
             </div>
             <div style={{ overflowX: 'auto', maxHeight: 520, overflowY: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#FDF6EE', position: 'sticky', top: 0 }}>
-                    {['#', 'Petugas (PPL)', 'Pengawas (PML)', petugasKec ? 'Kecamatan' : '', 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress'].filter(Boolean).map(h => (
+                    {['#', 'Petugas (PPL)', 'Pengawas (PML)', petugasKec ? 'Kecamatan' : '', 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress', 'Aksi'].filter(Boolean).map(h => (
                       <th key={h} style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: '1px solid #EDE3D8', whiteSpace: 'nowrap' as const }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {petugas.filter((p: any) => !petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase())).length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.</td></tr>
+                  {filteredPetugas.length === 0 && (
+                    <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.</td></tr>
                   )}
-                  {petugas
-                    .filter((p: any) => !petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase()))
-                    .map((p: any, i: number) => (
+                  {filteredPetugas.map((p: any, i: number) => (
                     <tr key={(p.nama_ppl ?? '') + i} style={{ background: i % 2 ? '#FAFAFA' : 'white' }} className="tbl-row">
                       <td style={{ padding: '10px 14px', fontSize: 12, color: '#8C7B6B' }}>{i + 1}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{p.nama_ppl}</td>
@@ -472,12 +518,22 @@ export default function ProgressPage() {
                           <span style={{ fontSize: 12, fontWeight: 700, color: '#E8751A', minWidth: 38 }}>{p.pct_cacah.toFixed(1)}%</span>
                         </div>
                       </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <button
+                          onClick={() => setHarianFocus({ kec: petugasKec, nama: p.nama_ppl, nonce: Date.now() })}
+                          style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #EDE3D8', background: 'white', color: '#C85E0A', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          title="Lihat grafik progress harian petugas ini"
+                        >📈 Harian</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {/* ── Performa Harian (grafik + tabel) ── */}
+          <PetugasHarianSection focus={harianFocus} />
         </div>
       </section>
 
