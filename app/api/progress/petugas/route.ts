@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     if (kec) {
       const [rows] = await pool.execute(
         `SELECT MAX(nama_ppl) AS nama_ppl, MAX(nama_pml) AS nama_pml, kode_kec,
-                SUM(total) AS total, SUM(selesai_cacah) AS selesai_cacah, SUM(selesai_approve) AS selesai_approve
+                SUM(total) AS total, SUM(draft) AS draft, SUM(selesai_cacah) AS selesai_cacah, SUM(selesai_approve) AS selesai_approve
          FROM fasih_subsls WHERE kode_kec = ? AND pencacah IS NOT NULL AND pencacah <> ''
          GROUP BY pencacah, kode_kec ORDER BY selesai_cacah DESC`, [kec],
       ) as [any[], any]
@@ -32,13 +32,14 @@ export async function GET(req: NextRequest) {
     } else {
       // total per pencacah lintas kecamatan (dari fasih_petugas)
       const [rows] = await pool.execute(
-        `SELECT nama_ppl, nama_pml, jumlah_unit AS total, target,
+        `SELECT nama_ppl, nama_pml, jumlah_unit AS total, target, draft,
                 selesai_cacah, selesai_approve, pct_cacah, pct_approve
          FROM fasih_petugas ORDER BY selesai_cacah DESC`,
       ) as [any[], any]
       petugas = rows.map((r: any) => ({
         nama_ppl: r.nama_ppl || '—', nama_pml: r.nama_pml || '—', nmkec: '',
-        total: Number(r.target || r.total), selesai_cacah: Number(r.selesai_cacah),
+        total: Number(r.target || r.total), draft: Number(r.draft),
+        selesai_cacah: Number(r.selesai_cacah),
         selesai_approve: Number(r.selesai_approve),
         pct_cacah: Number(r.pct_cacah), pct_approve: Number(r.pct_approve),
       }))
@@ -55,7 +56,7 @@ function mapRow(r: any, namaMap: Map<string, string>, pct: (a: number, t: number
   return {
     nama_ppl: r.nama_ppl || '—', nama_pml: r.nama_pml || '—',
     nmkec: namaMap.get(String(r.kode_kec)) ?? '',
-    total, selesai_cacah: cacah, selesai_approve: approve,
+    total, draft: Number(r.draft), selesai_cacah: cacah, selesai_approve: approve,
     pct_cacah: pct(cacah, total), pct_approve: pct(approve, total),
   }
 }

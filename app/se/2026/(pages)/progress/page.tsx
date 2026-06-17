@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { mockProgress, mockStats } from '@/lib/mockData'
 import WaveLoop from '@/components/decor/WaveLoop'
 import KecamatanTooltip from '@/components/KecamatanTooltip'
+import LiveUpdateBadge from '@/components/LiveUpdateBadge'
 import { withBase } from '@/lib/basePath'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
@@ -54,7 +55,6 @@ export default function ProgressPage() {
   const [petugasKec, setPetugasKec] = useState('')
   const [petugasKecList, setPetugasKecList] = useState<any[]>([])
   const [petugasQ, setPetugasQ] = useState('')
-  const [lastUpdate, setLastUpdate] = useState<string>('')
 
   const [desaOptions, setDesaOptions] = useState<any[]>([])
   const [slsOptions, setSlsOptions] = useState<any[]>([])
@@ -93,7 +93,7 @@ export default function ProgressPage() {
     let stop = false
     const load = () => {
       fetch('/api/progress', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) setProgress(j.data ?? []) }).catch(() => {})
-      fetch('/api/stats', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) { setStats(j); setLastUpdate(new Date().toLocaleTimeString('id-ID')) } }).catch(() => {})
+      fetch('/api/stats', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) setStats(j) }).catch(() => {})
     }
     load()
     const id = setInterval(load, 60000)
@@ -179,7 +179,7 @@ export default function ProgressPage() {
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#E8192C', display: 'inline-block', animation: 'liveDot 1.4s ease-in-out infinite' }} />
               LIVE · Progress assignment Fasih
             </span>
-            {lastUpdate && <span style={{ fontSize: 11, color: '#8C7B6B' }}>diperbarui {lastUpdate}</span>}
+            <LiveUpdateBadge unix={stats.last_ingest_unix} label={stats.last_ingest_str} />
             {drilledKec && (
               <span style={{ marginLeft: 'auto', fontSize: 12, color: '#E8751A', fontWeight: 700 }}>
                 🔍 Drill-down: {drilledKec.nmkec}
@@ -374,6 +374,7 @@ export default function ProgressPage() {
                     {[
                       { key: 'kecamatan' as const, label: 'Kecamatan' },
                       { key: 'target_usaha' as const, label: 'Target Assignment' },
+                      { key: null, label: 'Draft' },
                       { key: 'realisasi' as const, label: 'Selesai Cacah' },
                       { key: null, label: 'Approved' },
                       { key: 'persentase' as const, label: 'Progress' },
@@ -391,6 +392,9 @@ export default function ProgressPage() {
                     <tr key={k.id ?? k.kdkec ?? k.kecamatan} style={{ background: i % 2 === 1 ? '#FAFAFA' : 'white' }} className="tbl-row">
                       <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{k.nmkec ?? k.kecamatan}</td>
                       <td style={{ padding: '12px 14px', fontSize: 13, color: '#3D3D3D' }}>{k.target_usaha.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 13 }} title="Sudah dicacah tapi belum disubmit (tidak dihitung selesai)">
+                        <span style={{ color: '#1877F2', fontWeight: 700 }}>{(k.fasih?.draft ?? 0).toLocaleString('id-ID')}</span>
+                      </td>
                       <td style={{ padding: '12px 14px', fontSize: 13, color: '#3D3D3D' }}>{k.realisasi.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '12px 14px', fontSize: 13 }}>
                         <span style={{ color: '#00A651', fontWeight: 700 }}>{(k.fasih?.selesai_approve ?? 0).toLocaleString('id-ID')}</span>
@@ -439,7 +443,7 @@ export default function ProgressPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#FDF6EE', position: 'sticky', top: 0 }}>
-                    {['#', 'Petugas (PPL)', 'Pengawas (PML)', petugasKec ? 'Kecamatan' : '', 'Target', 'Selesai Cacah', 'Approved', 'Progress'].filter(Boolean).map(h => (
+                    {['#', 'Petugas (PPL)', 'Pengawas (PML)', petugasKec ? 'Kecamatan' : '', 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress'].filter(Boolean).map(h => (
                       <th key={h} style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: '1px solid #EDE3D8', whiteSpace: 'nowrap' as const }}>{h}</th>
                     ))}
                   </tr>
@@ -457,6 +461,7 @@ export default function ProgressPage() {
                       <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nama_pml}</td>
                       {petugasKec && <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nmkec}</td>}
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D' }}>{p.total.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#1877F2', fontWeight: 700 }} title="Sudah dicacah belum disubmit (tidak dihitung selesai)">{(p.draft ?? 0).toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#C85E0A' }}>{p.selesai_cacah.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#00A651', fontWeight: 700 }}>{p.selesai_approve.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', minWidth: 130 }}>

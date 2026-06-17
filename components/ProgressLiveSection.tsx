@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import DotsPattern from '@/components/decor/DotsPattern'
 import KecamatanTooltip from '@/components/KecamatanTooltip'
+import LiveUpdateBadge from '@/components/LiveUpdateBadge'
 import { withBase } from '@/lib/basePath'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import type { mockProgress, mockStats } from '@/lib/mockData'
@@ -265,10 +266,11 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
           {/* Filter skala UMK/UM/UB di-NONAKTIFKAN sementara — progress sekarang
               berbasis assignment Fasih (total vs selesai cacah), bukan per-skala.
               Akan diaktifkan lagi saat monitoring per-skala usaha siap. */}
-          <div style={{ marginTop: 14, fontSize: 11, color: '#8C7B6B', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ marginTop: 14, fontSize: 11, color: '#8C7B6B', display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FFF0DC', border: '1px solid rgba(232,117,26,.2)', borderRadius: 99, padding: '5px 12px', color: '#C85E0A', fontWeight: 700 }}>
               📊 Berdasarkan assignment Fasih
             </span>
+            <LiveUpdateBadge unix={(stats as any).last_ingest_unix} label={(stats as any).last_ingest_str} />
             {loading && <span style={{ fontSize: 10, color: '#8C7B6B' }}>memuat…</span>}
           </div>
         </motion.div>

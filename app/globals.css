@@ -92,6 +92,10 @@
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+  @keyframes liveDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .35; transform: scale(1.4); }
+  }
 }
 
 /* ── BASE ── */
