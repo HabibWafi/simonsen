@@ -65,23 +65,27 @@ export default function HomePage() {
   const [progress, setProgress] = useState(mockProgress)
 
   useEffect(() => {
-    fetch('/api/stats').then(r => r.json()).then(j => {
-      if (j && typeof j.total_target === 'number') setStats(j)
-    }).catch(() => {})
-    fetch('/api/progress').then(r => r.json()).then(j => {
-      if (Array.isArray(j?.data) && j.data.length) {
-        // Normalize: API may return nmkec, mockProgress uses kecamatan
-        setProgress(j.data.map((d: any, i: number) => ({
-          id: d.id ?? i + 1,
-          kecamatan: d.nmkec ?? d.kecamatan,
-          target_usaha: d.target_usaha,
-          realisasi: d.realisasi,
-          petugas_count: d.petugas_count ?? 0,
-          status: d.status ?? 'belum',
-          persentase: d.persentase ?? 0,
-        })))
-      }
-    }).catch(() => {})
+    const load = () => {
+      fetch('/api/stats', { cache: 'no-store' }).then(r => r.json()).then(j => {
+        if (j && typeof j.total_target === 'number') setStats(j)
+      }).catch(() => {})
+      fetch('/api/progress', { cache: 'no-store' }).then(r => r.json()).then(j => {
+        if (Array.isArray(j?.data) && j.data.length) {
+          setProgress(j.data.map((d: any, i: number) => ({
+            id: d.id ?? i + 1,
+            kecamatan: d.nmkec ?? d.kecamatan,
+            target_usaha: d.target_usaha,
+            realisasi: d.realisasi,
+            petugas_count: d.petugas_count ?? 0,
+            status: d.status ?? 'belum',
+            persentase: d.persentase ?? 0,
+          })))
+        }
+      }).catch(() => {})
+    }
+    load()
+    const id = setInterval(load, 60000)   // realtime: sinkron dengan bot scraper Fasih
+    return () => clearInterval(id)
   }, [])
 
   const top5Progress = [...progress]

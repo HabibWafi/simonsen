@@ -179,23 +179,24 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
       .then(r => r.json()).then(setGeoJson).catch(() => {})
   }, [])
 
-  // Fetch dari endpoint yang sama dengan halaman /se/2026/progress agar konsisten.
+  // Fetch progress — realtime: refetch tiap 60 detik (sinkron dengan bot scraper Fasih).
   useEffect(() => {
     let cancel = false
-    setLoading(true)
-    const qs = skalaFilter ? `?skala=${skalaFilter}` : ''
-    fetch(`/api/progress${qs}`)
-      .then(r => r.json())
-      .then(json => {
-        if (cancel) return
-        if (Array.isArray(json.data) && json.data.length > 0) {
-          setProgress(json.data)
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancel) setLoading(false) })
-    return () => { cancel = true }
-  }, [skalaFilter])
+    const load = (showLoad = false) => {
+      if (showLoad) setLoading(true)
+      fetch('/api/progress', { cache: 'no-store' })
+        .then(r => r.json())
+        .then(json => {
+          if (cancel) return
+          if (Array.isArray(json.data) && json.data.length > 0) setProgress(json.data)
+        })
+        .catch(() => {})
+        .finally(() => { if (!cancel) setLoading(false) })
+    }
+    load(true)
+    const id = setInterval(() => load(false), 60000)
+    return () => { cancel = true; clearInterval(id) }
+  }, [])
 
   const top5 = [...progress].sort((a, b) => b.persentase - a.persentase).slice(0, 5)
 
@@ -218,9 +219,9 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
   })()
 
   const statsCards = [
-    { icon: '🏪', val: stats.total_target,    label: 'Target Usaha',          suffix: '' },
-    { icon: '📊', val: Math.round(stats.persentase), label: 'Progress Pencacahan', suffix: '%' },
-    { icon: '🗺️', val: stats.kecamatan_count, label: 'Kecamatan Aktif',       suffix: '' },
+    { icon: '🏪', val: stats.total_target,    label: 'Total Assignment',      suffix: '' },
+    { icon: '📊', val: Math.round(stats.persentase), label: 'Progress Cacah',  suffix: '%' },
+    { icon: '🗺️', val: stats.kecamatan_count, label: 'Kecamatan',            suffix: '' },
     { icon: '👥', val: stats.petugas_aktif,    label: 'Petugas Aktif',         suffix: '' },
   ]
 
@@ -261,27 +262,14 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
             Pantau perkembangan pencacahan SE2026 per kecamatan di Kabupaten Musi Rawas secara real-time. Data diperbarui setiap hari kerja.
           </p>
 
-          {/* Skala filter */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 18, padding: '4px', background: '#FFF0DC', borderRadius: 99, border: '1px solid rgba(232,117,26,.18)' }}>
-            {(['', 'UMK', 'UM', 'UB'] as SkalaFilter[]).map(opt => {
-              const label = opt === '' ? 'Semua' : opt
-              const active = skalaFilter === opt
-              return (
-                <button
-                  key={opt || 'all'}
-                  onClick={() => setSkalaFilter(opt)}
-                  style={{
-                    padding: '7px 16px', borderRadius: 99,
-                    border: 'none', cursor: 'pointer',
-                    background: active ? '#E8751A' : 'transparent',
-                    color: active ? 'white' : '#6B6B6B',
-                    fontSize: 12, fontWeight: 700,
-                    transition: 'all .2s',
-                  }}
-                >{label}</button>
-              )
-            })}
-            {loading && <span style={{ fontSize: 10, color: '#8C7B6B', paddingRight: 8 }}>memuat…</span>}
+          {/* Filter skala UMK/UM/UB di-NONAKTIFKAN sementara — progress sekarang
+              berbasis assignment Fasih (total vs selesai cacah), bukan per-skala.
+              Akan diaktifkan lagi saat monitoring per-skala usaha siap. */}
+          <div style={{ marginTop: 14, fontSize: 11, color: '#8C7B6B', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FFF0DC', border: '1px solid rgba(232,117,26,.2)', borderRadius: 99, padding: '5px 12px', color: '#C85E0A', fontWeight: 700 }}>
+              📊 Berdasarkan assignment Fasih
+            </span>
+            {loading && <span style={{ fontSize: 10, color: '#8C7B6B' }}>memuat…</span>}
           </div>
         </motion.div>
 

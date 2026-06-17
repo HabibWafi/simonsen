@@ -57,7 +57,7 @@ export async function GET(_req: NextRequest) {
           },
         }
       })
-      return NextResponse.json({ data, source: 'fasih' })
+      return NextResponse.json({ data, source: 'fasih' }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
     // ---- Fallback: agregasi dari usaha (skala UMK/UM/UB) ----
@@ -92,7 +92,7 @@ export async function GET(_req: NextRequest) {
         },
       }
     })
-    return NextResponse.json({ data, source: 'usaha' })
+    return NextResponse.json({ data, source: 'usaha' }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e: any) {
     console.error('[api/progress] error:', e?.message)
     return NextResponse.json({ data: [], error: e?.message ?? 'DB error' })

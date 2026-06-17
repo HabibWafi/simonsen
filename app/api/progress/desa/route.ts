@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
           },
         }
       })
-      return NextResponse.json({ data, source: 'fasih' })
+      return NextResponse.json({ data, source: 'fasih' }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
     // ---- Fallback usaha ----
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
         },
       }
     })
-    return NextResponse.json({ data, source: 'usaha' })
+    return NextResponse.json({ data, source: 'usaha' }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e: any) {
     return NextResponse.json({ data: [], error: e.message }, { status: 500 })
   }

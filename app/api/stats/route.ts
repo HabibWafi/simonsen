@@ -28,7 +28,7 @@ export async function GET() {
         petugas_aktif:   Number(pet?.petugas_aktif) ?? 0,
         hari_tersisa:    hitungHariTersisa(),
         source: 'fasih',
-      })
+      }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
     const [[summary]] = await pool.execute(`

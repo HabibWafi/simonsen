@@ -49,6 +49,13 @@ export default function ProgressPage() {
   const [selectedSls, setSelectedSls] = useState<{ idsls: string; nmsls: string } | null>(null)
   const isMobile = useIsMobile()
 
+  // Progress per petugas (public, tanpa email) + realtime
+  const [petugas, setPetugas] = useState<any[]>([])
+  const [petugasKec, setPetugasKec] = useState('')
+  const [petugasKecList, setPetugasKecList] = useState<any[]>([])
+  const [petugasQ, setPetugasQ] = useState('')
+  const [lastUpdate, setLastUpdate] = useState<string>('')
+
   const [desaOptions, setDesaOptions] = useState<any[]>([])
   const [slsOptions, setSlsOptions] = useState<any[]>([])
 
@@ -81,12 +88,29 @@ export default function ProgressPage() {
       .then(r => r.json()).then(setGeoJson).catch(console.error)
   }, [])
 
-  // Load progress + stats when skala filter changes
+  // Load progress + stats — realtime: refetch tiap 60 detik (sinkron dengan bot scraper)
   useEffect(() => {
-    const url = `/api/progress${skala ? `?skala=${skala}` : ''}`
-    fetch(url).then(r => r.json()).then(j => setProgress(j.data ?? []))
-    fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {})
-  }, [skala])
+    let stop = false
+    const load = () => {
+      fetch('/api/progress', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) setProgress(j.data ?? []) }).catch(() => {})
+      fetch('/api/stats', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) { setStats(j); setLastUpdate(new Date().toLocaleTimeString('id-ID')) } }).catch(() => {})
+    }
+    load()
+    const id = setInterval(load, 60000)
+    return () => { stop = true; clearInterval(id) }
+  }, [])
+
+  // Progress per petugas (realtime + filter kecamatan)
+  useEffect(() => {
+    let stop = false
+    const load = () => {
+      fetch(`/api/progress/petugas${petugasKec ? `?kec=${encodeURIComponent(petugasKec)}` : ''}`, { cache: 'no-store' })
+        .then(r => r.json()).then(j => { if (!stop) { setPetugas(j.petugas ?? []); setPetugasKecList(j.kecamatanList ?? []) } }).catch(() => {})
+    }
+    load()
+    const id = setInterval(load, 60000)
+    return () => { stop = true; clearInterval(id) }
+  }, [petugasKec])
 
   const filtered = progress
     .filter((k: any) => (k.nmkec ?? k.kecamatan ?? '').toLowerCase().includes(search.toLowerCase()))
@@ -148,23 +172,14 @@ export default function ProgressPage() {
       <section style={{ background: '#FAF8F5', padding: '40px 24px 80px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
-          {/* Filter skala — segmented control */}
+          {/* Filter skala UMK/UM/UB dinonaktifkan sementara — progress kini berbasis
+              assignment Fasih (realtime). Indikator LIVE + drill-down breadcrumb. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#3D3D3D', textTransform: 'uppercase' as const, letterSpacing: .5 }}>Filter Skala:</span>
-            <div style={{ display: 'flex', background: 'white', borderRadius: 99, padding: 4, border: '1px solid #EDE3D8', boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}>
-              {SKALA_OPTS.map(opt => (
-                <button key={opt.v}
-                  onClick={() => setSkala(opt.v)}
-                  style={{
-                    padding: '8px 16px', borderRadius: 99,
-                    background: skala === opt.v ? opt.color : 'transparent',
-                    color: skala === opt.v ? 'white' : '#3D3D3D',
-                    border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    transition: 'all .2s',
-                  }}
-                >{opt.label}</button>
-              ))}
-            </div>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#FFF0DC', border: '1px solid rgba(232,117,26,.2)', borderRadius: 99, padding: '7px 14px', fontSize: 12, fontWeight: 700, color: '#C85E0A' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#E8192C', display: 'inline-block', animation: 'liveDot 1.4s ease-in-out infinite' }} />
+              LIVE · Progress assignment Fasih
+            </span>
+            {lastUpdate && <span style={{ fontSize: 11, color: '#8C7B6B' }}>diperbarui {lastUpdate}</span>}
             {drilledKec && (
               <span style={{ marginLeft: 'auto', fontSize: 12, color: '#E8751A', fontWeight: 700 }}>
                 🔍 Drill-down: {drilledKec.nmkec}
@@ -331,15 +346,13 @@ export default function ProgressPage() {
                       </div>
                       <span style={{ fontSize: 13, fontWeight: 700, color: '#E8751A', flexShrink: 0 }}>{k.persentase}%</span>
                     </div>
-                    {!skala && k.breakdown && (
-                      <div style={{ display: 'flex', gap: 6, paddingLeft: 36, fontSize: 10, fontWeight: 600 }}>
-                        <span style={{ color: '#00A651' }}>UMK {k.breakdown.UMK.realisasi}/{k.breakdown.UMK.target}</span>
+                    {k.fasih ? (
+                      <div style={{ display: 'flex', gap: 8, paddingLeft: 36, fontSize: 10, fontWeight: 600 }}>
+                        <span style={{ color: '#C85E0A' }}>Cacah {k.realisasi.toLocaleString('id-ID')}/{k.target_usaha.toLocaleString('id-ID')}</span>
                         <span style={{ color: '#8C7B6B' }}>·</span>
-                        <span style={{ color: '#1877F2' }}>UM {k.breakdown.UM.realisasi}/{k.breakdown.UM.target}</span>
-                        <span style={{ color: '#8C7B6B' }}>·</span>
-                        <span style={{ color: '#E8192C' }}>UB {k.breakdown.UB.realisasi}/{k.breakdown.UB.target}</span>
+                        <span style={{ color: '#00A651' }}>Approved {k.fasih.selesai_approve.toLocaleString('id-ID')}</span>
                       </div>
-                    )}
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -350,7 +363,7 @@ export default function ProgressPage() {
           <div style={{ background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', overflow: 'hidden', boxShadow: '0 2px 16px rgba(232,117,26,.07)' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>
-                Rekap Pencacahan{skala ? ` — Skala ${skala}` : ''}
+                Rekap Progress per Kecamatan
               </h3>
               <button onClick={exportCsv} style={{ padding: '8px 18px', borderRadius: 8, background: 'transparent', color: '#E8751A', border: '1.5px solid #E8751A', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>⬇ Export CSV</button>
             </div>
@@ -360,13 +373,9 @@ export default function ProgressPage() {
                   <tr style={{ background: '#FDF6EE' }}>
                     {[
                       { key: 'kecamatan' as const, label: 'Kecamatan' },
-                      { key: 'target_usaha' as const, label: 'Target' },
-                      { key: 'realisasi' as const, label: 'Realisasi' },
-                      ...(!skala ? [
-                        { key: null, label: 'UMK' },
-                        { key: null, label: 'UM' },
-                        { key: null, label: 'UB' },
-                      ] : []),
+                      { key: 'target_usaha' as const, label: 'Target Assignment' },
+                      { key: 'realisasi' as const, label: 'Selesai Cacah' },
+                      { key: null, label: 'Approved' },
                       { key: 'persentase' as const, label: 'Progress' },
                       { key: null, label: 'Status' },
                     ].map(col => (
@@ -383,23 +392,10 @@ export default function ProgressPage() {
                       <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{k.nmkec ?? k.kecamatan}</td>
                       <td style={{ padding: '12px 14px', fontSize: 13, color: '#3D3D3D' }}>{k.target_usaha.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '12px 14px', fontSize: 13, color: '#3D3D3D' }}>{k.realisasi.toLocaleString('id-ID')}</td>
-                      {!skala && k.breakdown && (
-                        <>
-                          <td style={{ padding: '12px 14px', fontSize: 12 }}>
-                            <span style={{ color: '#00A651', fontWeight: 700 }}>{k.breakdown.UMK.realisasi}</span>
-                            <span style={{ color: '#8C7B6B' }}>/{k.breakdown.UMK.target}</span>
-                          </td>
-                          <td style={{ padding: '12px 14px', fontSize: 12 }}>
-                            <span style={{ color: '#1877F2', fontWeight: 700 }}>{k.breakdown.UM.realisasi}</span>
-                            <span style={{ color: '#8C7B6B' }}>/{k.breakdown.UM.target}</span>
-                          </td>
-                          <td style={{ padding: '12px 14px', fontSize: 12 }}>
-                            <span style={{ color: '#E8192C', fontWeight: 700 }}>{k.breakdown.UB.realisasi}</span>
-                            <span style={{ color: '#8C7B6B' }}>/{k.breakdown.UB.target}</span>
-                          </td>
-                        </>
-                      )}
-                      {!skala && !k.breakdown && <><td>—</td><td>—</td><td>—</td></>}
+                      <td style={{ padding: '12px 14px', fontSize: 13 }}>
+                        <span style={{ color: '#00A651', fontWeight: 700 }}>{(k.fasih?.selesai_approve ?? 0).toLocaleString('id-ID')}</span>
+                        {k.fasih && <span style={{ color: '#8C7B6B', fontSize: 11 }}> ({k.fasih.pct_approve.toFixed(1)}%)</span>}
+                      </td>
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <div style={{ flex: 1, height: 6, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
@@ -423,12 +419,67 @@ export default function ProgressPage() {
               </table>
             </div>
           </div>
+
+          {/* ── Tabel Progress Petugas ── */}
+          <div style={{ background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', overflow: 'hidden', boxShadow: '0 2px 16px rgba(232,117,26,.07)', marginTop: 32 }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>Progress Petugas Pencacah (PPL)</h3>
+                <p style={{ fontSize: 12, color: '#8C7B6B', margin: '4px 0 0' }}>Realisasi pencacahan per petugas lapangan — diperbarui realtime.</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <select value={petugasKec} onChange={e => setPetugasKec(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 12, fontWeight: 700, color: '#3D3D3D', outline: 'none', background: 'white' }}>
+                  <option value="">🗺️ Semua Kecamatan</option>
+                  {petugasKecList.map((k: any) => <option key={k.kode_kec} value={k.kode_kec}>{k.nmkec}</option>)}
+                </select>
+                <input value={petugasQ} onChange={e => setPetugasQ(e.target.value)} placeholder="Cari nama…" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, outline: 'none', width: 150 }} />
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto', maxHeight: 520, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#FDF6EE', position: 'sticky', top: 0 }}>
+                    {['#', 'Petugas (PPL)', 'Pengawas (PML)', petugasKec ? 'Kecamatan' : '', 'Target', 'Selesai Cacah', 'Approved', 'Progress'].filter(Boolean).map(h => (
+                      <th key={h} style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: '1px solid #EDE3D8', whiteSpace: 'nowrap' as const }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {petugas.filter((p: any) => !petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase())).length === 0 && (
+                    <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.</td></tr>
+                  )}
+                  {petugas
+                    .filter((p: any) => !petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase()))
+                    .map((p: any, i: number) => (
+                    <tr key={(p.nama_ppl ?? '') + i} style={{ background: i % 2 ? '#FAFAFA' : 'white' }} className="tbl-row">
+                      <td style={{ padding: '10px 14px', fontSize: 12, color: '#8C7B6B' }}>{i + 1}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{p.nama_ppl}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nama_pml}</td>
+                      {petugasKec && <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nmkec}</td>}
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D' }}>{p.total.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#C85E0A' }}>{p.selesai_cacah.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#00A651', fontWeight: 700 }}>{p.selesai_approve.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', minWidth: 130 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden', minWidth: 50 }}>
+                            <div style={{ height: '100%', background: 'linear-gradient(90deg,#E8751A,#F5A623)', width: `${Math.min(p.pct_cacah, 100)}%`, borderRadius: 99 }} />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#E8751A', minWidth: 38 }}>{p.pct_cacah.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
       <style>{`
         .tbl-row:hover { background: #FFF0DC !important; }
         .rank-row:hover { background: #FFF0DC !important; }
+        @keyframes liveDot { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(1.4); } }
         @media (max-width: 900px) {
           .map-layout { grid-template-columns: 1fr !important; }
         }

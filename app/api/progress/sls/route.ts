@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
       const body: any = { data, source: 'fasih' }
       if (includeGeo) body.geojson = buildGeoJson(iddesa)
       return NextResponse.json(body, {
-        headers: { 'Cache-Control': 'public, max-age=120, s-maxage=300, stale-while-revalidate=60' },
+        headers: { 'Cache-Control': 'public, max-age=20, stale-while-revalidate=20' },
       })
     }
 
