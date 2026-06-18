@@ -121,7 +121,7 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
         </div>`
       : `<div style="font-family:Inter,sans-serif;min-width:160px">
           <strong style="font-size:13px;color:#1A1A1A">Desa ${nmdesa}</strong><br/>
-          <span style="font-size:11px;color:#8C7B6B">Belum ada data usaha</span>
+          <span style="font-size:11px;color:#8C7B6B">Belum ada data assignment</span>
           ${drillHint}
         </div>`
     ;(layer as any).bindTooltip(html, { permanent: false, sticky: true })

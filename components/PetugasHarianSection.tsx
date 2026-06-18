@@ -16,7 +16,7 @@ type Resp = {
 const PALETTE = ['#E8751A', '#1877F2', '#00A651', '#9333EA', '#E8192C', '#0EA5A4', '#D97706', '#DB2777', '#475569', '#65A30D']
 const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${day}/${m}` }
 
-export default function PetugasHarianSection({ focus }: { focus?: { kec: string; nama: string; nonce: number } }) {
+export default function PetugasHarianSection() {
   const [kec, setKec] = useState('')
   const [nama, setNama] = useState('')
   const [days, setDays] = useState(14)
@@ -25,15 +25,6 @@ export default function PetugasHarianSection({ focus }: { focus?: { kec: string;
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const chartRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
-
-  // Terima fokus dari tombol "Detail Harian" di tabel petugas
-  useEffect(() => {
-    if (!focus) return
-    setKec(focus.kec || '')
-    setNama(focus.nama || '')
-    setHidden(new Set())
-    rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [focus?.nonce]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let stop = false

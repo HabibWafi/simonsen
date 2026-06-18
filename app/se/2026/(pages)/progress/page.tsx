@@ -200,8 +200,8 @@ export default function ProgressPage() {
           <h1 style={{ fontSize: 'clamp(28px,4vw,48px)', fontWeight: 800, color: 'white', marginBottom: 20 }}>Peta Progress SE2026</h1>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {[
-              { label: 'Total Target', val: (stats.total_target ?? 0).toLocaleString('id-ID') + ' usaha', icon: '🏪' },
-              { label: 'Terealisasi', val: (stats.total_realisasi ?? 0).toLocaleString('id-ID') + ' usaha', icon: '✅' },
+              { label: 'Total Assignment', val: (stats.total_target ?? 0).toLocaleString('id-ID'), icon: '🏪' },
+              { label: 'Selesai Cacah', val: (stats.total_realisasi ?? 0).toLocaleString('id-ID'), icon: '✅' },
               { label: 'Progress',    val: (stats.persentase ?? 0) + '%',     icon: '📊' },
               { label: 'Hari Tersisa', val: (stats.hari_tersisa ?? 0) + ' hari', icon: '⏳' },
             ].map(s => (

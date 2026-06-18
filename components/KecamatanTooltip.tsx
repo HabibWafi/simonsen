@@ -36,7 +36,7 @@ export function buildKecamatanTooltipHtml({
 }: Omit<Props, 'compact'>): string {
   const skalaLabel = skalaFilter ? ` <span style="font-weight:500;opacity:.7;font-size:10px">[${skalaFilter}]</span>` : ''
   let body = `<div style="font-size:12px;line-height:1.55">
-    Target: <b>${target.toLocaleString('id-ID')}</b> usaha${skalaLabel}<br>
+    Target: <b>${target.toLocaleString('id-ID')}</b> assignment${skalaLabel}<br>
     Selesai cacah: <b>${realisasi.toLocaleString('id-ID')}</b> (${persentase.toFixed(1)}%)
   </div>`
 
@@ -73,7 +73,7 @@ export default function KecamatanTooltip(p: Props) {
     <div style={{ fontSize: compact ? 11 : 12, lineHeight: 1.55, minWidth: 200 }}>
       <div style={{ fontWeight: 700, fontSize: compact ? 12 : 13, marginBottom: 4, color: '#1A1A1A' }}>{nama}</div>
       <div>
-        Target: <b>{target.toLocaleString('id-ID')}</b> usaha{skalaFilter && <span style={{ opacity: .7, fontSize: 10 }}> [{skalaFilter}]</span>}<br />
+        Target: <b>{target.toLocaleString('id-ID')}</b> assignment{skalaFilter && <span style={{ opacity: .7, fontSize: 10 }}> [{skalaFilter}]</span>}<br />
         Selesai cacah: <b>{realisasi.toLocaleString('id-ID')}</b> ({persentase.toFixed(1)}%)
       </div>
       {fasih ? (

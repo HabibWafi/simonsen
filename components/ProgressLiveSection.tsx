@@ -429,7 +429,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
               <span style={{ fontSize: 11, color: '#6B6B6B', fontWeight: 600 }}>vs minggu lalu</span>
             </div>
             <div style={{ fontSize: 12, color: '#6B6B6B', marginTop: 10 }}>
-              dari <strong style={{ color: '#1A1A1A' }}>{stats.total_target.toLocaleString('id-ID')}</strong> target usaha
+              dari <strong style={{ color: '#1A1A1A' }}>{stats.total_target.toLocaleString('id-ID')}</strong> total assignment
             </div>
           </motion.div>
         </div>

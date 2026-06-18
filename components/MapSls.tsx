@@ -113,7 +113,7 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
         </div>`
       : `<div style="font-family:Inter,sans-serif;min-width:200px">
           <strong style="font-size:13px;color:#1A1A1A">SLS ${nmsls || kdsls}</strong><br/>
-          <span style="font-size:11px;color:#8C7B6B">Belum ada usaha tercatat di SLS ini.</span><br/>
+          <span style="font-size:11px;color:#8C7B6B">Belum ada assignment tercatat di SLS ini.</span><br/>
           <span style="font-size:10px;color:#A89A8C;font-style:italic">Jika seharusnya ada, periksa kolom KDSLS di file import.</span>
         </div>`
     ;(layer as any).bindTooltip(html, { permanent: false, sticky: true })
