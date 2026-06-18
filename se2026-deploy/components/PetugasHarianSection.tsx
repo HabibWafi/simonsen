@@ -54,16 +54,11 @@ export default function PetugasHarianSection({ focus }: { focus?: { kec: string;
   const series = resp?.series ?? []
   const shown = series.filter(s => !hidden.has(s.key)).slice(0, 10)
 
-  // Garis acuan di grafik = RATA-RATA (bukan total) supaya skala tidak didominasi
-  // total kabupaten/kecamatan sehingga garis lain tetap terlihat. Tabel tetap total.
-  const nSeries = series.length || 1
-  const avgName = kec ? 'Rata-rata per petugas' : 'Rata-rata per kecamatan'
   const chartData = useMemo(() => dates.map((d, i) => {
-    const total = resp?.aggregate?.data[i] ?? 0
-    const row: any = { date: fmtDate(d), __avg: Math.round((total / nSeries) * 10) / 10 }
+    const row: any = { date: fmtDate(d), __agg: resp?.aggregate?.data[i] ?? 0 }
     for (const s of shown) row[s.key] = s.data[i] ?? 0
     return row
-  }), [dates, shown, resp, nSeries])
+  }), [dates, shown, resp])
 
   function downloadChart(format: 'png' | 'jpeg') {
     const svg = chartRef.current?.querySelector('svg.recharts-surface') as SVGSVGElement | null
@@ -81,7 +76,7 @@ export default function PetugasHarianSection({ focus }: { focus?: { kec: string;
       <div style={{ padding: '20px 24px', borderBottom: '1px solid #EDE3D8' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>Performa Harian Petugas</h3>
         <p style={{ fontSize: 12, color: '#8C7B6B', margin: '4px 0 14px' }}>
-          Tambahan progress per hari (selisih cumulative antar hari) untuk evaluasi tren. {kec ? 'Garis = tiap petugas.' : 'Garis = tiap kecamatan.'} Garis oranye putus-putus = <strong>rata-rata</strong> (acuan). Angka total ada di tabel.
+          Tambahan progress per hari (selisih cumulative antar hari) untuk evaluasi tren. {kec ? 'Garis = tiap petugas.' : 'Garis = tiap kecamatan.'} Garis tebal oranye = total.
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={kec} onChange={e => { setKec(e.target.value); setNama('') }} style={sel}>
@@ -132,7 +127,7 @@ export default function PetugasHarianSection({ focus }: { focus?: { kec: string;
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8C7B6B' }} />
                   <YAxis tick={{ fontSize: 11, fill: '#8C7B6B' }} allowDecimals={false} />
                   <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #EDE3D8' }} />
-                  <Line type="monotone" dataKey="__avg" name={avgName} stroke="#E8751A" strokeWidth={3} strokeDasharray="6 4" dot={false} />
+                  <Line type="monotone" dataKey="__agg" name={resp?.aggregate?.name ?? 'Total'} stroke="#E8751A" strokeWidth={3} dot={false} />
                   {shown.map((s, i) => (
                     <Line key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={PALETTE[i % PALETTE.length]} strokeWidth={1.6} dot={{ r: 2 }} />
                   ))}

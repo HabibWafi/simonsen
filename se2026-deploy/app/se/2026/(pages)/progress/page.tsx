@@ -12,7 +12,6 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { exportCsv as exportCsvFile, exportTablePng } from '@/lib/exportTable'
 
 const PetugasHarianSection = dynamic(() => import('@/components/PetugasHarianSection'), { ssr: false })
-const PetugasMiniHarianModal = dynamic(() => import('@/components/PetugasMiniHarianModal'), { ssr: false })
 
 const MapKecamatan = dynamic(() => import('@/components/MapKecamatan'), {
   ssr: false,
@@ -63,13 +62,9 @@ export default function ProgressPage() {
   const [petugasKec, setPetugasKec] = useState('')
   const [petugasKecList, setPetugasKecList] = useState<any[]>([])
   const [petugasQ, setPetugasQ] = useState('')
-  const [petugasPml, setPetugasPml] = useState('')
-  const [miniPetugas, setMiniPetugas] = useState<{ kec: string; nama: string; nmkec: string } | null>(null)
+  const [harianFocus, setHarianFocus] = useState<{ kec: string; nama: string; nonce: number }>({ kec: '', nama: '', nonce: 0 })
 
-  const pmlList = [...new Set(petugas.map((p: any) => p.nama_pml).filter(Boolean))].sort()
-  const filteredPetugas = petugas.filter((p: any) =>
-    (!petugasPml || p.nama_pml === petugasPml) &&
-    (!petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase())))
+  const filteredPetugas = petugas.filter((p: any) => !petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase()))
 
   function exportPetugasCsv() {
     const headers = ['No', 'Petugas (PPL)', 'Pengawas (PML)', ...(petugasKec ? ['Kecamatan'] : []), 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress %']
@@ -200,8 +195,8 @@ export default function ProgressPage() {
           <h1 style={{ fontSize: 'clamp(28px,4vw,48px)', fontWeight: 800, color: 'white', marginBottom: 20 }}>Peta Progress SE2026</h1>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {[
-              { label: 'Total Target', val: (stats.total_target ?? 0).toLocaleString('id-ID') + ' usaha', icon: '🏪' },
-              { label: 'Terealisasi', val: (stats.total_realisasi ?? 0).toLocaleString('id-ID') + ' usaha', icon: '✅' },
+              { label: 'Total Target', val: (stats.total_target ?? 0).toLocaleString('id-ID') + ' assignment', icon: '🏪' },
+              { label: 'Terealisasi', val: (stats.total_realisasi ?? 0).toLocaleString('id-ID') + ' assignment', icon: '✅' },
               { label: 'Progress',    val: (stats.persentase ?? 0) + '%',     icon: '📊' },
               { label: 'Hari Tersisa', val: (stats.hari_tersisa ?? 0) + ' hari', icon: '⏳' },
             ].map(s => (
@@ -368,7 +363,7 @@ export default function ProgressPage() {
                         </div>
                       </>
                     ) : (
-                      <p style={{ fontSize: 12, color: '#8C7B6B', fontStyle: 'italic', margin: 0 }}>Pilih wilayah di filter atas untuk melihat detail UMK/UM/UB & target.</p>
+                      <p style={{ fontSize: 12, color: '#8C7B6B', fontStyle: 'italic', margin: 0 }}>Pilih wilayah di filter atas untuk melihat detail Target dan Progress Pencacahan.</p>
                     )}
                   </div>
                 )
@@ -487,11 +482,7 @@ export default function ProgressPage() {
                   <option value="">🗺️ Semua Kecamatan</option>
                   {petugasKecList.map((k: any) => <option key={k.kode_kec} value={k.kode_kec}>{k.nmkec}</option>)}
                 </select>
-                <select value={petugasPml} onChange={e => setPetugasPml(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 12, fontWeight: 700, color: '#3D3D3D', outline: 'none', background: 'white', maxWidth: 180 }} title="Filter per Pengawas (PML)">
-                  <option value="">🧑‍💼 Semua PML</option>
-                  {pmlList.map((nm: any) => <option key={nm} value={nm}>{nm}</option>)}
-                </select>
-                <input value={petugasQ} onChange={e => setPetugasQ(e.target.value)} placeholder="Cari nama…" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, outline: 'none', width: 130 }} />
+                <input value={petugasQ} onChange={e => setPetugasQ(e.target.value)} placeholder="Cari nama…" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, outline: 'none', width: 140 }} />
                 <button onClick={exportPetugasCsv} disabled={!filteredPetugas.length} style={exBtn}>⬇ CSV</button>
                 <button onClick={exportPetugasPng} disabled={!filteredPetugas.length} style={exBtn}>🖼️ PNG</button>
               </div>
@@ -529,7 +520,7 @@ export default function ProgressPage() {
                       </td>
                       <td style={{ padding: '10px 14px' }}>
                         <button
-                          onClick={() => setMiniPetugas({ kec: petugasKec, nama: p.nama_ppl, nmkec: petugasKecList.find((k: any) => k.kode_kec === petugasKec)?.nmkec ?? p.nmkec ?? '' })}
+                          onClick={() => setHarianFocus({ kec: petugasKec, nama: p.nama_ppl, nonce: Date.now() })}
                           style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #EDE3D8', background: 'white', color: '#C85E0A', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
                           title="Lihat grafik progress harian petugas ini"
                         >📈 Harian</button>
@@ -542,14 +533,9 @@ export default function ProgressPage() {
           </div>
 
           {/* ── Performa Harian (grafik + tabel) ── */}
-          <PetugasHarianSection />
+          <PetugasHarianSection focus={harianFocus} />
         </div>
       </section>
-
-      {/* Popup grafik harian per petugas (independen) */}
-      {miniPetugas && (
-        <PetugasMiniHarianModal kec={miniPetugas.kec} nama={miniPetugas.nama} nmkec={miniPetugas.nmkec} onClose={() => setMiniPetugas(null)} />
-      )}
 
       <style>{`
         .tbl-row:hover { background: #FFF0DC !important; }

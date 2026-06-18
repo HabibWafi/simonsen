@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+/* ── BRAND CSS VARIABLES ── */
+:root {
+  --o:   #E8751A;
+  --od:  #C85E0A;
+  --ol:  #F5A623;
+  --op:  #FFF0DC;
+  --ob:  #FDF6EE;
+  --cream:  #FAF8F5;
+  --cream2: #F5EDE0;
+  --cream3: #EDE3D8;
+  --white:  #FFFFFF;
+  --tx:  #1A1A1A;
+  --tx2: #3D3D3D;
+  --mu:  #6B6B6B;
+  --green: #00A651;
+  --gp:    #E8FFF3;
+  --red:   #E8192C;
+  --sh:  0 2px 16px rgba(232,117,26,.09);
+  --shl: 0 8px 40px rgba(232,117,26,.16);
+  --r4: 4px; --r8: 8px; --r12: 12px;
+  --r14: 14px; --r16: 16px; --r99: 99px;
+}
+
+/* ── TAILWIND V4 THEME TOKENS ── */
+@theme {
+  --color-orange:       #E8751A;
+  --color-orange-dark:  #C85E0A;
+  --color-orange-light: #F5A623;
+  --color-orange-pale:  #FFF0DC;
+  --color-orange-bg:    #FDF6EE;
+
+  --color-cream:        #FAF8F5;
+  --color-cream-mid:    #F5EDE0;
+  --color-cream-border: #EDE3D8;
+
+  --color-tx:           #1A1A1A;
+  --color-tx2:          #3D3D3D;
+  --color-muted:        #6B6B6B;
+
+  --color-green:        #00A651;
+  --color-green-pale:   #E8FFF3;
+  --color-red:          #E8192C;
+
+  --font-inter: 'Inter', sans-serif;
+
+  --radius-4:  4px;
+  --radius-8:  8px;
+  --radius-12: 12px;
+  --radius-14: 14px;
+  --radius-16: 16px;
+  --radius-99: 99px;
+
+  --shadow-card:    0 2px 16px rgba(232,117,26,.09);
+  --shadow-card-lg: 0 8px 40px rgba(232,117,26,.16);
+
+  --animate-fade-up:    fadeUp .55s ease both;
+  --animate-fade-left:  fadeLeft .55s ease both;
+  --animate-fade-right: fadeRight .55s ease both;
+  --animate-float:      float 4s ease-in-out infinite;
+  --animate-pulse-dot:  pulseDot 1.4s ease-in-out infinite;
+  --animate-pulse-ring: pulseRing 1.4s ease-out infinite;
+  --animate-spin-slow:  spin 1s linear infinite;
+  --animate-count:      countFlip .3s ease both;
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(22px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeLeft {
+    from { opacity: 0; transform: translateX(-22px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fadeRight {
+    from { opacity: 0; transform: translateX(22px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-7px); }
+  }
+  @keyframes pulseDot {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: .35; }
+  }
+  @keyframes pulseRing {
+    0%   { transform: scale(1); opacity: 1; }
+    100% { transform: scale(2.3); opacity: 0; }
+  }
+  @keyframes countFlip {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes liveDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .35; transform: scale(1.4); }
+  }
+}
+
+/* ── BASE ── */
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-inter), 'Inter', sans-serif;
+  background: var(--cream);
+  color: var(--tx);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+/* ── TEXTURED STRIP — fixed di top, di belakang navbar floating ── */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 220px;
+  background:
+    radial-gradient(ellipse 80% 180px at 50% 0%, rgba(232,117,26,.10) 0%, transparent 70%),
+    var(--cream);
+  pointer-events: none;
+  z-index: -1;
+}
+/* body::after dots dipindah jadi React component <BodyTopDots /> di layout.tsx
+   supaya path-aware (mendukung basePath multi-tenant). */
+
+/* ── HERO halaman dalam: extend ke atas, navbar floating menyatu ── */
+.hero-flush-navbar {
+  margin-top: -96px;
+  padding-top: calc(96px + 56px) !important;
+}
+
+/* ── ANIMATION DELAYS ── */
+.d1 { animation-delay: .1s; }
+.d2 { animation-delay: .2s; }
+.d3 { animation-delay: .3s; }
+.d4 { animation-delay: .4s; }
+.d5 { animation-delay: .5s; }
+
+/* ── LEAFLET OVERRIDES ── */
+.leaflet-container { border-radius: var(--r12); }
