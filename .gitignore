@@ -42,3 +42,6 @@ next-env.d.ts
 
 # backup zips (jangan ikut ke repo)
 *.zip
+
+# extracted deploy zip (jangan ikut repo)
+se2026-deploy/
