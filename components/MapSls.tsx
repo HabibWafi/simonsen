@@ -41,6 +41,7 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
   const [slsData, setSlsData] = useState<SlsRow[]>([])
   const [loading, setLoading] = useState(true)
   const [bounds, setBounds] = useState<L.LatLngBoundsExpression | null>(null)
+  const [selId, setSelId] = useState('')   // SLS terpilih → disorot
 
   useEffect(() => {
     let cancel = false
@@ -83,12 +84,15 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
     const kdsls = String(p.kdsls ?? '')
     const d = byKey.get(idsls) || byKey.get(kdsls)
     const pct = d?.persentase ?? 0
+    const fid = idsls || kdsls
+    const isSel = fid !== '' && fid === selId
     return {
       fillColor: pctToColor(pct),
-      weight: 1.1,
+      weight: isSel ? 3.2 : 1.1,
       opacity: 1,
-      color: '#C85E0A',
-      fillOpacity: 0.78,
+      color: isSel ? '#FFFFFF' : '#C85E0A',
+      fillOpacity: isSel ? 0.92 : 0.78,
+      className: isSel ? 'map-feat-selected' : '',
     }
   }
 
@@ -117,6 +121,17 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
           <span style="font-size:10px;color:#A89A8C;font-style:italic">Jika seharusnya ada, periksa kolom KDSLS di file import.</span>
         </div>`
     ;(layer as any).bindTooltip(html, { permanent: false, sticky: true })
+
+    const fid = idsls || kdsls
+    if (fid && fid === selId) {
+      queueMicrotask(() => { try { (layer as any).bringToFront?.() } catch {} })
+    }
+
+    layer.on({
+      click: () => setSelId(fid),
+      mouseover: (e: any) => { e.target.setStyle({ weight: 2.4, fillOpacity: 0.92 }); try { e.target.bringToFront?.() } catch {} },
+      mouseout: (e: any) => { e.target.setStyle(style(feature)) },
+    })
   }
 
   const featureCount = geoJson?.features.length ?? 0
@@ -158,7 +173,7 @@ export default function MapSls({ iddesa, nmdesa, nmkec, skala, onBack }: Props) 
             attribution='&copy; OpenStreetMap'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <GeoJSON key={iddesa + skala} data={geoJson} style={style as any} onEachFeature={onEachFeature} />
+          <GeoJSON key={iddesa + skala + selId} data={geoJson} style={style as any} onEachFeature={onEachFeature} />
         </MapContainer>
       ) : (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EDE0', textAlign: 'center', padding: 24 }}>

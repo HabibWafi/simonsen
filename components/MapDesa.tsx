@@ -48,6 +48,7 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
   const [desaData, setDesaData] = useState<DesaRow[]>([])
   const [loading, setLoading] = useState(true)
   const [bounds, setBounds] = useState<L.LatLngBoundsExpression | null>(null)
+  const [selId, setSelId] = useState('')   // iddesa terpilih → disorot
 
   useEffect(() => {
     setLoading(true)
@@ -90,12 +91,14 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
     const iddesa = String(feature?.properties?.iddesa ?? '')
     const d = byKey.get(iddesa)
     const pct = d?.persentase ?? 0
+    const isSel = iddesa !== '' && iddesa === selId
     return {
       fillColor: pctToColor(pct),
-      weight: 1.2,
+      weight: isSel ? 3.5 : 1.2,
       opacity: 1,
-      color: '#C85E0A',
-      fillOpacity: 0.78,
+      color: isSel ? '#FFFFFF' : '#C85E0A',
+      fillOpacity: isSel ? 0.92 : 0.78,
+      className: isSel ? 'map-feat-selected' : '',
     }
   }
 
@@ -126,9 +129,15 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
         </div>`
     ;(layer as any).bindTooltip(html, { permanent: false, sticky: true })
 
-    if (onDesaClick) {
-      layer.on({ click: () => onDesaClick(iddesa, nmdesa) })
+    if (iddesa && iddesa === selId) {
+      queueMicrotask(() => { try { (layer as any).bringToFront?.() } catch {} })
     }
+
+    layer.on({
+      click: () => { setSelId(iddesa); onDesaClick?.(iddesa, nmdesa) },
+      mouseover: (e: any) => { e.target.setStyle({ weight: 2.5, fillOpacity: 0.92 }); try { e.target.bringToFront?.() } catch {} },
+      mouseout: (e: any) => { e.target.setStyle(style(feature)) },
+    })
   }
 
   const featureCount = geoJson?.features.length ?? 0
@@ -166,7 +175,7 @@ export default function MapDesa({ kdkec, nmkec, skala, onBack, onDesaClick }: Pr
             attribution='&copy; OpenStreetMap'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <GeoJSON key={kdkec + skala} data={geoJson} style={style as any} onEachFeature={onEachFeature} />
+          <GeoJSON key={kdkec + skala + selId} data={geoJson} style={style as any} onEachFeature={onEachFeature} />
         </MapContainer>
       ) : (
         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EDE0', textAlign: 'center', padding: 24 }}>

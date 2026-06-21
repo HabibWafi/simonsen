@@ -75,6 +75,9 @@ export default function ProgressPage() {
   const [petugasKecList, setPetugasKecList] = useState<any[]>([])
   const [petugasQ, setPetugasQ] = useState('')
   const [petugasPml, setPetugasPml] = useState('')
+  const [petugasWeek, setPetugasWeek] = useState('')        // '' = Seluruh Waktu; else start ISO minggu
+  const [petugasWeeks, setPetugasWeeks] = useState<any[]>([]) // daftar bucket minggu dari API
+  const [petugasWeekInfo, setPetugasWeekInfo] = useState<any>(null) // {n,start,end,label} saat mode minggu
   const [miniPetugas, setMiniPetugas] = useState<{ kec: string; nama: string; nmkec: string } | null>(null)
   const [pgSort, setPgSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'selesai_cacah', dir: 'desc' })
 
@@ -95,11 +98,18 @@ export default function ProgressPage() {
       return m * (av < bv ? -1 : av > bv ? 1 : 0)
     })
 
+  // Mode minggu → tabel berfungsi sebagai PERINGKAT MINGGUAN.
+  const isWeekMode = !!petugasWeek
+  const isWeekRank = isWeekMode && pgSort.key === 'selesai_cacah' && pgSort.dir === 'desc'
+  const medal = (i: number) => ['🥇', '🥈', '🥉'][i] ?? null
+  const petugasWeekLabel = petugasWeekInfo?.label ?? petugasWeeks.find((w: any) => w.start === petugasWeek)?.label ?? ''
+
   function exportPetugasCsv() {
     const headers = ['No', 'Petugas (PPL)', 'Pengawas (PML)', ...(petugasKec ? ['Kecamatan'] : []), 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress %']
-    const rows = filteredPetugas.map((p: any, i: number) => [i + 1, p.nama_ppl, p.nama_pml, ...(petugasKec ? [p.nmkec] : []), p.total, p.draft ?? 0, p.selesai_cacah, p.selesai_approve, p.pct_cacah.toFixed(1)])
+    const rows = filteredPetugas.map((p: any, i: number) => [i + 1, p.nama_ppl, p.nama_pml, ...(petugasKec ? [p.nmkec] : []), p.total, p.draft == null ? '—' : p.draft, p.selesai_cacah, p.selesai_approve, p.pct_cacah.toFixed(1)])
     const kecLbl = petugasKecList.find((k: any) => k.kode_kec === petugasKec)?.nmkec
-    exportCsvFile(`progress-petugas${kecLbl ? '-' + kecLbl : ''}.csv`, headers, rows as any)
+    const periodTag = isWeekMode ? `-minggu${petugasWeekInfo?.n ?? ''}` : ''
+    exportCsvFile(`progress-petugas${kecLbl ? '-' + kecLbl : ''}${periodTag}.csv`, headers, rows as any)
   }
   function exportPetugasPng() {
     const num = (v: number) => Number(v).toLocaleString('id-ID')
@@ -116,16 +126,18 @@ export default function ProgressPage() {
       { label: 'Progress', width: 80, align: 'right' as const },
     ]
     const rows = filteredPetugas.map((p: any, i: number) => ({ ...p, _no: i + 1 }))
+    const periodTag = isWeekMode ? `-minggu${petugasWeekInfo?.n ?? ''}` : ''
+    const draftCell = (p: any) => p.draft == null ? '—' : num(p.draft)
     exportTablePng({
-      filename: `progress-petugas${kecLbl ? '-' + kecLbl : ''}.png`,
-      title: 'Progress Petugas Pencacah SE2026',
-      subtitle: `${kecLbl ? 'Kecamatan ' + kecLbl : 'Seluruh Kecamatan'} · ${filteredPetugas.length} petugas`,
+      filename: `progress-petugas${kecLbl ? '-' + kecLbl : ''}${periodTag}.png`,
+      title: isWeekMode ? `Peringkat Mingguan Petugas SE2026 — ${petugasWeekLabel}` : 'Progress Petugas Pencacah SE2026',
+      subtitle: `${kecLbl ? 'Kecamatan ' + kecLbl : 'Seluruh Kecamatan'} · ${filteredPetugas.length} petugas${isWeekMode ? ' · progres minggu ini' : ''}`,
       columns: cols,
       rows,
       cell: (p: any, ci: number) => {
         const base = petugasKec
-          ? [String(p._no), p.nama_ppl, p.nama_pml, p.nmkec, num(p.total), num(p.draft ?? 0), num(p.selesai_cacah), num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
-          : [String(p._no), p.nama_ppl, p.nama_pml, num(p.total), num(p.draft ?? 0), num(p.selesai_cacah), num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
+          ? [String(p._no), p.nama_ppl, p.nama_pml, p.nmkec, num(p.total), draftCell(p), num(p.selesai_cacah), num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
+          : [String(p._no), p.nama_ppl, p.nama_pml, num(p.total), draftCell(p), num(p.selesai_cacah), num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
         return base[ci]
       },
     })
@@ -175,17 +187,26 @@ export default function ProgressPage() {
     return () => { stop = true; clearInterval(id) }
   }, [])
 
-  // Progress per petugas (realtime + filter kecamatan)
+  // Progress per petugas (realtime + filter kecamatan + filter minggu)
   useEffect(() => {
     let stop = false
     const load = () => {
-      fetch(`/api/progress/petugas${petugasKec ? `?kec=${encodeURIComponent(petugasKec)}` : ''}`, { cache: 'no-store' })
-        .then(r => r.json()).then(j => { if (!stop) { setPetugas(j.petugas ?? []); setPetugasKecList(j.kecamatanList ?? []) } }).catch(() => {})
+      const qs = new URLSearchParams()
+      if (petugasKec) qs.set('kec', petugasKec)
+      if (petugasWeek) qs.set('week', petugasWeek)
+      fetch(`/api/progress/petugas${qs.toString() ? `?${qs}` : ''}`, { cache: 'no-store' })
+        .then(r => r.json()).then(j => {
+          if (stop) return
+          setPetugas(j.petugas ?? [])
+          setPetugasKecList(j.kecamatanList ?? [])
+          if (j.weeks) setPetugasWeeks(j.weeks)
+          setPetugasWeekInfo(j.week ?? null)
+        }).catch(() => {})
     }
     load()
     const id = setInterval(load, 60000)
     return () => { stop = true; clearInterval(id) }
-  }, [petugasKec])
+  }, [petugasKec, petugasWeek])
 
   const filtered = progress
     .filter((k: any) => (k.nmkec ?? k.kecamatan ?? '').toLowerCase().includes(search.toLowerCase()))
@@ -512,10 +533,20 @@ export default function ProgressPage() {
           <div style={{ background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', overflow: 'hidden', boxShadow: '0 2px 16px rgba(232,117,26,.07)', marginTop: 32 }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>Progress Petugas Pencacah (PPL)</h3>
-                <p style={{ fontSize: 12, color: '#8C7B6B', margin: '4px 0 0' }}>Realisasi pencacahan per petugas lapangan — diperbarui realtime.</p>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>
+                  {isWeekMode ? `🏆 Peringkat Mingguan Petugas (PPL)` : 'Progress Petugas Pencacah (PPL)'}
+                </h3>
+                <p style={{ fontSize: 12, color: '#8C7B6B', margin: '4px 0 0', maxWidth: 560 }}>
+                  {isWeekMode
+                    ? <>Peringkat <strong>{petugasWeekLabel}</strong> — dihitung <strong>hanya</strong> dari progres minggu itu, jadi tiap minggu bisa juara berbeda. Yang tertinggal tetap berpeluang menang tiap minggu.</>
+                    : 'Realisasi pencacahan per petugas lapangan (akumulasi) — diperbarui realtime.'}
+                </p>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <select value={petugasWeek} onChange={e => setPetugasWeek(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: petugasWeek ? '1.5px solid #E8751A' : '1px solid #EDE3D8', fontSize: 12, fontWeight: 700, color: petugasWeek ? '#C85E0A' : '#3D3D3D', outline: 'none', background: petugasWeek ? '#FFF7EF' : 'white' }} title="Pilih periode — Seluruh Waktu atau per minggu">
+                  <option value="">🗓️ Seluruh Waktu</option>
+                  {petugasWeeks.map((w: any) => <option key={w.start} value={w.start}>{w.label}</option>)}
+                </select>
                 <select value={petugasKec} onChange={e => setPetugasKec(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 12, fontWeight: 700, color: '#3D3D3D', outline: 'none', background: 'white' }}>
                   <option value="">🗺️ Semua Kecamatan</option>
                   {petugasKecList.map((k: any) => <option key={k.kode_kec} value={k.kode_kec}>{k.nmkec}</option>)}
@@ -540,9 +571,9 @@ export default function ProgressPage() {
                       ...(petugasKec ? [{ label: 'Kecamatan', key: 'nmkec' }] : []),
                       { label: 'Target', key: 'total' },
                       { label: 'Draft', key: 'draft' },
-                      { label: 'Selesai Cacah', key: 'selesai_cacah' },
-                      { label: 'Approved', key: 'selesai_approve' },
-                      { label: 'Progress', key: 'pct_cacah' },
+                      { label: isWeekMode ? 'Cacah Minggu Ini' : 'Selesai Cacah', key: 'selesai_cacah' },
+                      { label: isWeekMode ? 'Approved Minggu Ini' : 'Approved', key: 'selesai_approve' },
+                      { label: isWeekMode ? 'Kontribusi' : 'Progress', key: 'pct_cacah' },
                       { label: 'Aksi', key: null },
                     ].map(c => (
                       <th key={c.label} onClick={() => c.key && pgClickSort(c.key)}
@@ -554,16 +585,18 @@ export default function ProgressPage() {
                 </thead>
                 <tbody>
                   {filteredPetugas.length === 0 && (
-                    <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.</td></tr>
+                    <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>{isWeekMode ? `Belum ada progres petugas pada ${petugasWeekLabel || 'minggu ini'}.` : 'Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.'}</td></tr>
                   )}
                   {filteredPetugas.map((p: any, i: number) => (
-                    <tr key={(p.nama_ppl ?? '') + i} style={{ background: i % 2 ? '#FAFAFA' : 'white' }} className="tbl-row">
-                      <td style={{ padding: '10px 14px', fontSize: 12, color: '#8C7B6B' }}>{i + 1}</td>
+                    <tr key={(p.nama_ppl ?? '') + i} style={{ background: isWeekRank && i < 3 ? '#FFF7EF' : (i % 2 ? '#FAFAFA' : 'white') }} className="tbl-row">
+                      <td style={{ padding: '10px 14px', fontSize: isWeekRank && i < 3 ? 16 : 12, color: '#8C7B6B', fontWeight: isWeekRank && i < 3 ? 800 : 400 }}>
+                        {isWeekRank && medal(i) ? <span title={`Peringkat #${i + 1} minggu ini`}>{medal(i)}</span> : i + 1}
+                      </td>
                       <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{p.nama_ppl}</td>
                       <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nama_pml}</td>
                       {petugasKec && <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nmkec}</td>}
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D' }}>{p.total.toLocaleString('id-ID')}</td>
-                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#1877F2', fontWeight: 700 }} title="Sudah dicacah belum disubmit (tidak dihitung selesai)">{(p.draft ?? 0).toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#1877F2', fontWeight: 700 }} title={isWeekMode ? 'Draft per-minggu tidak tersedia' : 'Sudah dicacah belum disubmit (tidak dihitung selesai)'}>{p.draft == null ? '—' : (p.draft).toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#C85E0A' }}>{p.selesai_cacah.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#00A651', fontWeight: 700 }}>{p.selesai_approve.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', minWidth: 130 }}>

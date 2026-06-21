@@ -146,3 +146,15 @@ body::before {
 
 /* ── LEAFLET OVERRIDES ── */
 .leaflet-container { border-radius: var(--r12); }
+
+/* Hilangkan "kotak hitam" — outline fokus bawaan browser pada path SVG saat di-klik.
+   Path tetap bisa di-fokus (a11y) tapi tanpa kotak bounding-box hitam. */
+.leaflet-container .leaflet-interactive:focus,
+.leaflet-container path.leaflet-interactive:focus { outline: none !important; }
+
+/* Sorot daerah terpilih: glow oranye berdenyut mengikuti bentuk wilayah (bukan kotak). */
+@keyframes mapSelGlow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(232,117,26,.55)); }
+  50%      { filter: drop-shadow(0 0 9px rgba(232,117,26,1)); }
+}
+.map-feat-selected { animation: mapSelGlow 1.7s ease-in-out infinite; }

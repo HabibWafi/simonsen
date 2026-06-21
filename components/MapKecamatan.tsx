@@ -51,11 +51,11 @@ export default function MapKecamatan({ data, geoJson, onKecClick, activeKec, ska
     const isActive = activeKec && idkec === activeKec
     return {
       fillColor: pctToColor(pct),
-      weight: isActive ? 3 : 1.2,
+      weight: isActive ? 3.5 : 1.2,
       opacity: 1,
-      color: isActive ? '#1A1A1A' : '#C85E0A',
-      fillOpacity: 0.78,
-      dashArray: isActive ? undefined : '0',
+      color: isActive ? '#FFFFFF' : '#C85E0A',
+      fillOpacity: isActive ? 0.92 : 0.78,
+      className: isActive ? 'map-feat-selected' : '',
     }
   }
 
@@ -83,10 +83,17 @@ export default function MapKecamatan({ data, geoJson, onKecClick, activeKec, ska
         </div>`
     ;(layer as any).bindTooltip(html, { permanent: false, sticky: true, className: 'leaflet-custom-tooltip' })
 
+    // bawa wilayah aktif ke depan supaya border putih + glow tidak tertimpa tetangga
+    if (activeKec && idkec === activeKec) {
+      queueMicrotask(() => { try { (layer as any).bringToFront?.() } catch {} })
+    }
+
     layer.on({
       click: () => onKecClick?.(idkec, nmkec),
       mouseover: (e: LeafletMouseEvent) => {
-        (e.target as any).setStyle({ weight: 2.5, fillOpacity: 0.9 })
+        const t = e.target as any
+        t.setStyle({ weight: 2.5, fillOpacity: 0.92 })
+        try { t.bringToFront?.() } catch {}
       },
       mouseout: (e: LeafletMouseEvent) => {
         (e.target as any).setStyle(style(feature))
