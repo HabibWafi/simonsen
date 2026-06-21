@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { mockStats, mockProgress, mockPosts, kategoriUsaha, jadwalTimeline } from '@/lib/mockData'
+import { mockPosts, kategoriUsaha, jadwalTimeline } from '@/lib/mockData'
 import WaveLoop from '@/components/decor/WaveLoop'
 import DotsPattern from '@/components/decor/DotsPattern'
 import ChevronAccent from '@/components/decor/ChevronAccent'
@@ -61,8 +61,9 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function HomePage() {
-  const [stats, setStats] = useState(mockStats)
-  const [progress, setProgress] = useState(mockProgress)
+  // null/[] = belum ada data nyata → komponen tampilkan loading, BUKAN angka dummy.
+  const [stats, setStats] = useState<any>(null)
+  const [progress, setProgress] = useState<any[]>([])
 
   useEffect(() => {
     const load = () => {

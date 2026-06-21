@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { mockProgress, mockStats } from '@/lib/mockData'
 import WaveLoop from '@/components/decor/WaveLoop'
 import KecamatanTooltip from '@/components/KecamatanTooltip'
 import LiveUpdateBadge from '@/components/LiveUpdateBadge'
@@ -60,8 +59,9 @@ const SKALA_OPTS: { v: Skala; label: string; color: string }[] = [
 
 export default function ProgressPage() {
   const [skala, setSkala] = useState<Skala>('')
-  const [progress, setProgress] = useState<any[]>(mockProgress)
-  const [stats, setStats] = useState<any>(mockStats)
+  const [progress, setProgress] = useState<any[]>([])
+  const [stats, setStats] = useState<any>(null)
+  const [progressLoaded, setProgressLoaded] = useState(false)
   const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(getCachedKecGeo())
   const [drilledKec, setDrilledKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
   const [drilledDesa, setDrilledDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
@@ -167,7 +167,7 @@ export default function ProgressPage() {
   useEffect(() => {
     let stop = false
     const load = () => {
-      fetch('/api/progress', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) setProgress(j.data ?? []) }).catch(() => {})
+      fetch('/api/progress', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) { setProgress(j.data ?? []); setProgressLoaded(true) } }).catch(() => { if (!stop) setProgressLoaded(true) })
       fetch('/api/stats', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) setStats(j) }).catch(() => {})
     }
     load()
@@ -223,10 +223,10 @@ export default function ProgressPage() {
           <h1 style={{ fontSize: 'clamp(28px,4vw,48px)', fontWeight: 800, color: 'white', marginBottom: 20 }}>Peta Progress SE2026</h1>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {[
-              { label: 'Total Assignment', val: (stats.total_target ?? 0).toLocaleString('id-ID'), icon: '🏪' },
-              { label: 'Selesai Cacah', val: (stats.total_realisasi ?? 0).toLocaleString('id-ID'), icon: '✅' },
-              { label: 'Progress',    val: (stats.persentase ?? 0) + '%',     icon: '📊' },
-              { label: 'Hari Tersisa', val: (stats.hari_tersisa ?? 0) + ' hari', icon: '⏳' },
+              { label: 'Total Assignment', val: stats ? (stats.total_target ?? 0).toLocaleString('id-ID') : '…', icon: '🏪' },
+              { label: 'Selesai Cacah', val: stats ? (stats.total_realisasi ?? 0).toLocaleString('id-ID') : '…', icon: '✅' },
+              { label: 'Progress',    val: stats ? (stats.persentase ?? 0) + '%' : '…',     icon: '📊' },
+              { label: 'Hari Tersisa', val: stats ? (stats.hari_tersisa ?? 0) + ' hari' : '…', icon: '⏳' },
             ].map(s => (
               <div key={s.label} style={{ background: 'rgba(0,0,0,.15)', borderRadius: 10, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10, border: '1px solid rgba(255,255,255,.15)' }}>
                 <span style={{ fontSize: 20 }}>{s.icon}</span>
@@ -253,7 +253,7 @@ export default function ProgressPage() {
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#E8192C', display: 'inline-block', animation: 'liveDot 1.4s ease-in-out infinite' }} />
               LIVE · Progress assignment Fasih
             </span>
-            <LiveUpdateBadge unix={stats.last_ingest_unix} label={stats.last_ingest_str} />
+            {stats && <LiveUpdateBadge unix={stats.last_ingest_unix} label={stats.last_ingest_str} />}
             {drilledKec && (
               <span style={{ marginLeft: 'auto', fontSize: 12, color: '#E8751A', fontWeight: 700 }}>
                 🔍 Drill-down: {drilledKec.nmkec}
@@ -404,7 +404,11 @@ export default function ProgressPage() {
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari…" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, width: 120, outline: 'none' }} />
               </div>
               <div style={{ background: 'white', borderRadius: 12, border: '1px solid #EDE3D8', overflow: 'hidden', maxHeight: 480, overflowY: 'auto' }}>
-                {filtered.sort((a: any, b: any) => b.persentase - a.persentase).map((k: any, i: number) => (
+                {!progressLoaded ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</div>
+                ) : filtered.length === 0 ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</div>
+                ) : filtered.sort((a: any, b: any) => b.persentase - a.persentase).map((k: any, i: number) => (
                   <button key={k.id ?? k.kdkec ?? k.kecamatan}
                     onClick={() => k.kdkec && setDrilledKec({ kdkec: k.kdkec, nmkec: k.nmkec ?? k.kecamatan })}
                     style={{ width: '100%', padding: '12px 16px', borderBottom: '1px solid #EDE3D8', display: 'flex', flexDirection: 'column', gap: 6, background: 'none', border: 'none', cursor: k.kdkec ? 'pointer' : 'default', textAlign: 'left' as const }}
@@ -462,6 +466,12 @@ export default function ProgressPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {!progressLoaded && (
+                    <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</td></tr>
+                  )}
+                  {progressLoaded && filtered.length === 0 && (
+                    <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</td></tr>
+                  )}
                   {filtered.map((k: any, i: number) => (
                     <tr key={k.id ?? k.kdkec ?? k.kecamatan} style={{ background: i % 2 === 1 ? '#FAFAFA' : 'white' }} className="tbl-row">
                       <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{k.nmkec ?? k.kecamatan}</td>

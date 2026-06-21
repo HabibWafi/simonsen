@@ -96,7 +96,13 @@
     0%, 100% { opacity: 1; transform: scale(1); }
     50%      { opacity: .35; transform: scale(1.4); }
   }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
 }
+
+/* Loading helpers — DI LUAR @theme (Tailwind v4 hanya izinkan custom-prop / @keyframes di @theme) */
+.spin { animation: spin 1.1s linear infinite; }
+.skeleton { background: linear-gradient(90deg, #F0E9E0 25%, #FBF6EF 37%, #F0E9E0 63%); background-size: 800px 100%; animation: shimmer 1.4s infinite linear; border-radius: 6px; color: transparent !important; }
 
 /* ── BASE ── */
 html { scroll-behavior: smooth; }

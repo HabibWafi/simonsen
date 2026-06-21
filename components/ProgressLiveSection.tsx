@@ -43,7 +43,7 @@ type LiveRow = (typeof mockProgress)[number] & { breakdown?: ProgressBreakdown |
 
 interface Props {
   progress: typeof mockProgress
-  stats: typeof mockStats
+  stats: (typeof mockStats) | null
 }
 
 /* ── Animated counter (in-view triggered, easeOut cubic) ── */
@@ -220,11 +220,14 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
     return [...seen.values()].sort((a, b) => a.nmkec.localeCompare(b.nmkec))
   })()
 
+  // stats bisa null saat masih loading — tampilkan '…' bukan angka dummy.
+  const statsReady = !!stats
+  const st: any = stats ?? {}
   const statsCards = [
-    { icon: '🏪', val: stats.total_target,    label: 'Total Assignment',      suffix: '' },
-    { icon: '📊', val: Math.round(stats.persentase), label: 'Progress Cacah',  suffix: '%' },
-    { icon: '🗺️', val: stats.kecamatan_count, label: 'Kecamatan',            suffix: '' },
-    { icon: '👥', val: stats.petugas_aktif,    label: 'Petugas Aktif',         suffix: '' },
+    { icon: '🏪', val: st.total_target ?? 0,    label: 'Total Assignment',      suffix: '' },
+    { icon: '📊', val: Math.round(st.persentase ?? 0), label: 'Progress Cacah',  suffix: '%' },
+    { icon: '🗺️', val: st.kecamatan_count ?? 0, label: 'Kecamatan',            suffix: '' },
+    { icon: '👥', val: st.petugas_aktif ?? 0,    label: 'Petugas Aktif',         suffix: '' },
   ]
 
   return (
@@ -271,7 +274,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FFF0DC', border: '1px solid rgba(232,117,26,.2)', borderRadius: 99, padding: '5px 12px', color: '#C85E0A', fontWeight: 700 }}>
               📊 Berdasarkan assignment Fasih
             </span>
-            <LiveUpdateBadge unix={(stats as any).last_ingest_unix} label={(stats as any).last_ingest_str} />
+            {statsReady && <LiveUpdateBadge unix={st.last_ingest_unix} label={st.last_ingest_str} />}
             {loading && <span style={{ fontSize: 10, color: '#8C7B6B' }}>memuat…</span>}
           </div>
         </motion.div>
@@ -318,7 +321,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
               }}>{s.icon}</div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 24, fontWeight: 900, color: '#C85E0A', lineHeight: 1, letterSpacing: -1, whiteSpace: 'nowrap' }}>
-                  <AnimatedNumber value={s.val} />{s.suffix}
+                  {statsReady ? <><AnimatedNumber value={s.val} />{s.suffix}</> : '…'}
                 </div>
                 <div style={{ fontSize: 11, color: '#6B6B6B', fontWeight: 600, marginTop: 4 }}>{s.label}</div>
               </div>
@@ -360,6 +363,12 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
             </div>
 
             <div>
+              {progress.length === 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '32px 0', color: '#9A8C7B' }}>
+                  <span className="spin" style={{ width: 26, height: 26, border: '3px solid #F0E3D2', borderTopColor: '#E8751A', borderRadius: '50%', display: 'inline-block' }} />
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>Memuat data progress…</span>
+                </div>
+              )}
               {top5.map((k, i) => (
                 <motion.div
                   key={k.id}
@@ -424,13 +433,11 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
             }}
           >
             <div style={{ fontSize: 11, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 14 }}>Gauge Keseluruhan</div>
-            <RadialGauge value={stats.persentase} />
-            <div style={{ marginTop: 18, padding: '10px 16px', background: '#E8FFF3', borderRadius: 99, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: '#00A651', fontWeight: 800 }}>▲ +2,1%</span>
-              <span style={{ fontSize: 11, color: '#6B6B6B', fontWeight: 600 }}>vs minggu lalu</span>
-            </div>
-            <div style={{ fontSize: 12, color: '#6B6B6B', marginTop: 10 }}>
-              dari <strong style={{ color: '#1A1A1A' }}>{stats.total_target.toLocaleString('id-ID')}</strong> total assignment
+            <RadialGauge value={statsReady ? st.persentase : 0} />
+            <div style={{ fontSize: 12, color: '#6B6B6B', marginTop: 18 }}>
+              {statsReady
+                ? <>dari <strong style={{ color: '#1A1A1A' }}>{(st.total_target ?? 0).toLocaleString('id-ID')}</strong> total assignment</>
+                : 'Memuat data progress…'}
             </div>
           </motion.div>
         </div>

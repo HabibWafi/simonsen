@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { hitungHariTersisa } from '@/lib/utils'
-import { mockStats } from '@/lib/mockData'
+
+// Stats kosong (BUKAN dummy) — supaya tidak ada angka palsu yang menyesatkan.
+const EMPTY_STATS = {
+  total_target: 0, total_realisasi: 0, total_approve: 0, persentase: 0,
+  kecamatan_count: 0, desa_count: 0, petugas_aktif: 0,
+  last_ingest_unix: null, last_ingest_str: null, snapshot_ts: null, has_data: false,
+}
+const noStore = { headers: { 'Cache-Control': 'no-store' } }
 
 export async function GET() {
   try {
@@ -45,8 +52,9 @@ export async function GET() {
         last_ingest_unix: lastUnix,
         last_ingest_str:  lastStr,
         snapshot_ts:      snap?.snapshot_ts ?? null,
+        has_data: true,
         source: 'fasih',
-      }, { headers: { 'Cache-Control': 'no-store' } })
+      }, noStore)
     }
 
     const [[summary]] = await pool.execute(`
@@ -59,7 +67,7 @@ export async function GET() {
     `) as [any[], any]
 
     if (!summary || Number(summary.total_target) === 0) {
-      return NextResponse.json({ ...mockStats, hari_tersisa: hitungHariTersisa() })
+      return NextResponse.json({ ...EMPTY_STATS, hari_tersisa: hitungHariTersisa() }, noStore)
     }
 
     const [[activeToday]] = await pool.execute(`
@@ -79,8 +87,10 @@ export async function GET() {
       desa_count:      Number(summary.desa_count) ?? 0,
       petugas_aktif:   Number(activeToday?.petugas_aktif) ?? 0,
       hari_tersisa:    hitungHariTersisa(),
-    })
+      has_data:        true,
+      source:          'usaha',
+    }, noStore)
   } catch {
-    return NextResponse.json({ ...mockStats, hari_tersisa: hitungHariTersisa() })
+    return NextResponse.json({ ...EMPTY_STATS, hari_tersisa: hitungHariTersisa() }, noStore)
   }
 }

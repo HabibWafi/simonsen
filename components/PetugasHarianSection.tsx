@@ -64,7 +64,13 @@ export default function PetugasHarianSection() {
 
   const dates = resp?.dates ?? []
   const series = resp?.series ?? []
-  const shown = series.filter(s => !hidden.has(s.key)).slice(0, 10)
+  // Tampilkan SEMUA seri (semua kecamatan / semua petugas), tidak dibatasi.
+  const shown = series.filter(s => !hidden.has(s.key))
+  // Warna stabil per-seri (index di array penuh) → chip & garis grafik selalu sewarna.
+  const colorOf = (key: string) => {
+    const idx = series.findIndex(s => s.key === key)
+    return PALETTE[(idx < 0 ? 0 : idx) % PALETTE.length]
+  }
 
   // Garis acuan di grafik = RATA-RATA (bukan total) supaya skala tidak didominasi
   // total kabupaten/kecamatan sehingga garis lain tetap terlihat. Tabel tetap total.
@@ -157,12 +163,12 @@ export default function PetugasHarianSection() {
             {/* toggle chips (sembunyikan/tampilkan garis) */}
             {series.length > 1 && (
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                {series.slice(0, 12).map((s, i) => {
+                {series.map((s) => {
                   const off = hidden.has(s.key)
                   return (
                     <button key={s.key} onClick={() => setHidden(prev => { const n = new Set(prev); n.has(s.key) ? n.delete(s.key) : n.add(s.key); return n })}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 99, border: '1px solid #EDE3D8', background: off ? '#F5F5F5' : 'white', color: off ? '#B0A697' : '#3D3D3D', fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: off ? 'line-through' : 'none' }}>
-                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: PALETTE[i % PALETTE.length], display: 'inline-block', opacity: off ? .3 : 1 }} />
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: colorOf(s.key), display: 'inline-block', opacity: off ? .3 : 1 }} />
                       {s.name}
                     </button>
                   )
@@ -178,8 +184,8 @@ export default function PetugasHarianSection() {
                   <YAxis tick={{ fontSize: 11, fill: '#8C7B6B' }} allowDecimals={false} />
                   <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #EDE3D8' }} />
                   <Line type="monotone" dataKey="__avg" name={avgName} stroke="#E8751A" strokeWidth={3} strokeDasharray="6 4" dot={false} />
-                  {shown.map((s, i) => (
-                    <Line key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={PALETTE[i % PALETTE.length]} strokeWidth={1.6} dot={{ r: 2 }} />
+                  {shown.map((s) => (
+                    <Line key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={colorOf(s.key)} strokeWidth={1.6} dot={{ r: 2 }} />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
