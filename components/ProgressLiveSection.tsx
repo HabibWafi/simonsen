@@ -8,6 +8,7 @@ import DotsPattern from '@/components/decor/DotsPattern'
 import KecamatanTooltip from '@/components/KecamatanTooltip'
 import LiveUpdateBadge from '@/components/LiveUpdateBadge'
 import { withBase } from '@/lib/basePath'
+import { loadKecGeo, getCachedKecGeo } from '@/lib/geoCache'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import type { mockProgress, mockStats } from '@/lib/mockData'
 import type { ProgressBreakdown, SkalaUsaha } from '@/types'
@@ -133,7 +134,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
   const [skalaFilter, setSkalaFilter] = useState<SkalaFilter>('')
   const [progress, setProgress] = useState<LiveRow[]>(initialProgress as any)
   const [loading, setLoading] = useState(false)
-  const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null)
+  const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(getCachedKecGeo())
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [drillKec, setDrillKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
   const [drillDesa, setDrillDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
@@ -174,11 +175,11 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
       .catch(() => setSlsOptions([]))
   }, [drillDesa?.iddesa, skalaFilter])
 
-  // Load GeoJSON kecamatan sekali (sama dengan halaman /se/2026/progress).
+  // Load GeoJSON kecamatan sekali (module-cache → instan, tidak nyangkut).
   useEffect(() => {
-    fetch(withBase('/geo/musirawas_kec.geojson'))
-      .then(r => r.json()).then(setGeoJson).catch(() => {})
-  }, [])
+    if (geoJson) return
+    loadKecGeo().then(g => { if (g) setGeoJson(g) })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch progress — realtime: refetch tiap 60 detik (sinkron dengan bot scraper Fasih).
   useEffect(() => {

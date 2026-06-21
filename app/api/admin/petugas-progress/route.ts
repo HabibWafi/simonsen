@@ -46,18 +46,23 @@ export async function GET(req: NextRequest) {
         }
       })
     } else {
+      // Sumber sama dgn view per-kec (fasih_subsls) → konsisten.
       const [rows] = await pool.execute(
-        `SELECT pencacah, nama_ppl, nama_pml, jumlah_unit AS total, target,
-                selesai_cacah, selesai_approve, pct_cacah, pct_approve, open, draft, submitted_pencacah AS submitted, approved
-         FROM fasih_petugas ORDER BY selesai_cacah DESC`,
+        `SELECT pencacah, MAX(nama_ppl) AS nama_ppl, MAX(nama_pml) AS nama_pml,
+                SUM(total) AS total, SUM(selesai_cacah) AS selesai_cacah, SUM(selesai_approve) AS selesai_approve,
+                SUM(open) AS open, SUM(draft) AS draft, SUM(submitted_pencacah) AS submitted, SUM(approved) AS approved
+         FROM fasih_subsls WHERE pencacah IS NOT NULL AND pencacah <> ''
+         GROUP BY pencacah ORDER BY selesai_cacah DESC`,
       ) as [any[], any]
-      petugas = rows.map((r: any) => ({
-        pencacah: r.pencacah, nama_ppl: r.nama_ppl, nama_pml: r.nama_pml,
-        total: Number(r.total), target: Number(r.target),
-        selesai_cacah: Number(r.selesai_cacah), selesai_approve: Number(r.selesai_approve),
-        pct_cacah: Number(r.pct_cacah), pct_approve: Number(r.pct_approve),
-        open: Number(r.open), draft: Number(r.draft), submitted: Number(r.submitted), approved: Number(r.approved),
-      }))
+      petugas = rows.map((r: any) => {
+        const total = Number(r.total), cacah = Number(r.selesai_cacah), approve = Number(r.selesai_approve)
+        return {
+          pencacah: r.pencacah, nama_ppl: r.nama_ppl, nama_pml: r.nama_pml,
+          total, selesai_cacah: cacah, selesai_approve: approve,
+          pct_cacah: pct(cacah, total), pct_approve: pct(approve, total),
+          open: Number(r.open), draft: Number(r.draft), submitted: Number(r.submitted), approved: Number(r.approved),
+        }
+      })
     }
 
     const [pengawasRows] = await pool.execute(

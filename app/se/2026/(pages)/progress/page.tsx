@@ -10,6 +10,7 @@ import LiveUpdateBadge from '@/components/LiveUpdateBadge'
 import { withBase } from '@/lib/basePath'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { exportCsv as exportCsvFile, exportTablePng } from '@/lib/exportTable'
+import { loadKecGeo, getCachedKecGeo } from '@/lib/geoCache'
 
 const PetugasHarianSection = dynamic(() => import('@/components/PetugasHarianSection'), { ssr: false })
 const PetugasMiniHarianModal = dynamic(() => import('@/components/PetugasMiniHarianModal'), { ssr: false })
@@ -28,7 +29,17 @@ const MapSls = dynamic(() => import('@/components/MapSls'), {
 })
 
 type Skala = '' | 'UMK' | 'UM' | 'UB'
-type SortKey = 'kecamatan' | 'target_usaha' | 'realisasi' | 'persentase'
+type SortKey = 'kecamatan' | 'target_usaha' | 'draft' | 'realisasi' | 'approved' | 'persentase' | 'status'
+
+function rekapSortVal(k: any, key: SortKey): string | number {
+  switch (key) {
+    case 'kecamatan': return (k.nmkec ?? k.kecamatan ?? '').toLowerCase()
+    case 'draft':     return Number(k.fasih?.draft ?? 0)
+    case 'approved':  return Number(k.fasih?.selesai_approve ?? 0)
+    case 'status':    return String(k.status ?? '')
+    default:          return Number(k[key] ?? 0)
+  }
+}
 
 const mobSelectStyle: React.CSSProperties = {
   width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #EDE3D8',
@@ -51,7 +62,7 @@ export default function ProgressPage() {
   const [skala, setSkala] = useState<Skala>('')
   const [progress, setProgress] = useState<any[]>(mockProgress)
   const [stats, setStats] = useState<any>(mockStats)
-  const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null)
+  const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(getCachedKecGeo())
   const [drilledKec, setDrilledKec] = useState<{ kdkec: string; nmkec: string } | null>(null)
   const [drilledDesa, setDrilledDesa] = useState<{ iddesa: string; nmdesa: string } | null>(null)
   // Info SLS terpilih lewat dropdown (info-only di mobile)
@@ -65,11 +76,24 @@ export default function ProgressPage() {
   const [petugasQ, setPetugasQ] = useState('')
   const [petugasPml, setPetugasPml] = useState('')
   const [miniPetugas, setMiniPetugas] = useState<{ kec: string; nama: string; nmkec: string } | null>(null)
+  const [pgSort, setPgSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'selesai_cacah', dir: 'desc' })
+
+  const pgSortVal = (p: any, key: string): string | number => {
+    if (key === 'nama_ppl' || key === 'nama_pml' || key === 'nmkec') return String(p[key] ?? '').toLowerCase()
+    return Number(p[key] ?? 0)
+  }
+  const pgClickSort = (key: string) => setPgSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' })
 
   const pmlList = [...new Set(petugas.map((p: any) => p.nama_pml).filter(Boolean))].sort()
-  const filteredPetugas = petugas.filter((p: any) =>
-    (!petugasPml || p.nama_pml === petugasPml) &&
-    (!petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase())))
+  const filteredPetugas = petugas
+    .filter((p: any) =>
+      (!petugasPml || p.nama_pml === petugasPml) &&
+      (!petugasQ || (p.nama_ppl ?? '').toLowerCase().includes(petugasQ.toLowerCase()) || (p.nama_pml ?? '').toLowerCase().includes(petugasQ.toLowerCase())))
+    .sort((a: any, b: any) => {
+      const m = pgSort.dir === 'desc' ? -1 : 1
+      const av = pgSortVal(a, pgSort.key), bv = pgSortVal(b, pgSort.key)
+      return m * (av < bv ? -1 : av > bv ? 1 : 0)
+    })
 
   function exportPetugasCsv() {
     const headers = ['No', 'Petugas (PPL)', 'Pengawas (PML)', ...(petugasKec ? ['Kecamatan'] : []), 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress %']
@@ -133,11 +157,11 @@ export default function ProgressPage() {
   const [sortBy, setSortBy] = useState<SortKey>('persentase')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
-  // Load geojson once
+  // Load geojson sekali (module-cache → instan di kunjungan berikutnya, tidak nyangkut)
   useEffect(() => {
-    fetch(withBase('/geo/musirawas_kec.geojson'))
-      .then(r => r.json()).then(setGeoJson).catch(console.error)
-  }, [])
+    if (geoJson) return
+    loadKecGeo().then(g => { if (g) setGeoJson(g) })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load progress + stats — realtime: refetch tiap 60 detik (sinkron dengan bot scraper)
   useEffect(() => {
@@ -167,8 +191,7 @@ export default function ProgressPage() {
     .filter((k: any) => (k.nmkec ?? k.kecamatan ?? '').toLowerCase().includes(search.toLowerCase()))
     .sort((a: any, b: any) => {
       const mult = sortDir === 'desc' ? -1 : 1
-      const av = a[sortBy] ?? a.kecamatan ?? a.nmkec
-      const bv = b[sortBy] ?? b.kecamatan ?? b.nmkec
+      const av = rekapSortVal(a, sortBy), bv = rekapSortVal(b, sortBy)
       return mult * (av < bv ? -1 : av > bv ? 1 : 0)
     })
 
@@ -425,11 +448,11 @@ export default function ProgressPage() {
                     {[
                       { key: 'kecamatan' as const, label: 'Kecamatan' },
                       { key: 'target_usaha' as const, label: 'Target Assignment' },
-                      { key: null, label: 'Draft' },
+                      { key: 'draft' as const, label: 'Draft' },
                       { key: 'realisasi' as const, label: 'Selesai Cacah' },
-                      { key: null, label: 'Approved' },
+                      { key: 'approved' as const, label: 'Approved' },
                       { key: 'persentase' as const, label: 'Progress' },
-                      { key: null, label: 'Status' },
+                      { key: 'status' as const, label: 'Status' },
                     ].map(col => (
                       <th key={col.label} onClick={() => col.key && handleSort(col.key as SortKey)}
                           style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: '1px solid #EDE3D8', cursor: col.key ? 'pointer' : 'default', whiteSpace: 'nowrap' as const }}>
@@ -500,8 +523,22 @@ export default function ProgressPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#FDF6EE', position: 'sticky', top: 0 }}>
-                    {['#', 'Petugas (PPL)', 'Pengawas (PML)', petugasKec ? 'Kecamatan' : '', 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress', 'Aksi'].filter(Boolean).map(h => (
-                      <th key={h} style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: '1px solid #EDE3D8', whiteSpace: 'nowrap' as const }}>{h}</th>
+                    {[
+                      { label: '#', key: null },
+                      { label: 'Petugas (PPL)', key: 'nama_ppl' },
+                      { label: 'Pengawas (PML)', key: 'nama_pml' },
+                      ...(petugasKec ? [{ label: 'Kecamatan', key: 'nmkec' }] : []),
+                      { label: 'Target', key: 'total' },
+                      { label: 'Draft', key: 'draft' },
+                      { label: 'Selesai Cacah', key: 'selesai_cacah' },
+                      { label: 'Approved', key: 'selesai_approve' },
+                      { label: 'Progress', key: 'pct_cacah' },
+                      { label: 'Aksi', key: null },
+                    ].map(c => (
+                      <th key={c.label} onClick={() => c.key && pgClickSort(c.key)}
+                        style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: '1px solid #EDE3D8', whiteSpace: 'nowrap' as const, cursor: c.key ? 'pointer' : 'default', background: '#FDF6EE' }}>
+                        {c.label} {c.key && pgSort.key === c.key ? (pgSort.dir === 'desc' ? '↓' : '↑') : ''}
+                      </th>
                     ))}
                   </tr>
                 </thead>
