@@ -28,12 +28,14 @@ const MapSls = dynamic(() => import('@/components/MapSls'), {
 })
 
 type Skala = '' | 'UMK' | 'UM' | 'UB'
-type SortKey = 'kecamatan' | 'target_usaha' | 'draft' | 'realisasi' | 'approved' | 'persentase' | 'status'
+type SortKey = 'kecamatan' | 'target_usaha' | 'draft' | 'realisasi' | 'rejected' | 'revoked' | 'approved' | 'persentase' | 'status'
 
 function rekapSortVal(k: any, key: SortKey): string | number {
   switch (key) {
     case 'kecamatan': return (k.nmkec ?? k.kecamatan ?? '').toLowerCase()
     case 'draft':     return Number(k.fasih?.draft ?? 0)
+    case 'rejected':  return Number(k.fasih?.rejected ?? 0)
+    case 'revoked':   return Number(k.fasih?.revoked ?? 0)
     case 'approved':  return Number(k.fasih?.selesai_approve ?? 0)
     case 'status':    return String(k.status ?? '')
     default:          return Number(k[key] ?? 0)
@@ -105,8 +107,8 @@ export default function ProgressPage() {
   const petugasWeekLabel = petugasWeekInfo?.label ?? petugasWeeks.find((w: any) => w.start === petugasWeek)?.label ?? ''
 
   function exportPetugasCsv() {
-    const headers = ['No', 'Petugas (PPL)', 'Pengawas (PML)', ...(petugasKec ? ['Kecamatan'] : []), 'Target', 'Draft', 'Selesai Cacah', 'Approved', 'Progress %']
-    const rows = filteredPetugas.map((p: any, i: number) => [i + 1, p.nama_ppl, p.nama_pml, ...(petugasKec ? [p.nmkec] : []), p.total, p.draft == null ? '—' : p.draft, p.selesai_cacah, p.selesai_approve, p.pct_cacah.toFixed(1)])
+    const headers = ['No', 'Petugas (PPL)', 'Pengawas (PML)', ...(petugasKec ? ['Kecamatan'] : []), 'Target', 'Draft', 'Selesai Cacah', 'Rejected', 'Revoked', 'Approved', 'Progress %']
+    const rows = filteredPetugas.map((p: any, i: number) => [i + 1, p.nama_ppl, p.nama_pml, ...(petugasKec ? [p.nmkec] : []), p.total, p.draft == null ? '—' : p.draft, p.selesai_cacah, p.rejected == null ? '—' : p.rejected, p.revoked == null ? '—' : p.revoked, p.selesai_approve, p.pct_cacah.toFixed(1)])
     const kecLbl = petugasKecList.find((k: any) => k.kode_kec === petugasKec)?.nmkec
     const periodTag = isWeekMode ? `-minggu${petugasWeekInfo?.n ?? ''}` : ''
     exportCsvFile(`progress-petugas${kecLbl ? '-' + kecLbl : ''}${periodTag}.csv`, headers, rows as any)
@@ -122,6 +124,8 @@ export default function ProgressPage() {
       { label: 'Target', width: 70, align: 'right' as const },
       { label: 'Draft', width: 60, align: 'right' as const, color: () => '#1877F2' },
       { label: 'Cacah', width: 70, align: 'right' as const, color: () => '#C85E0A' },
+      { label: 'Rejected', width: 70, align: 'right' as const, color: () => '#E8192C' },
+      { label: 'Revoked', width: 70, align: 'right' as const, color: () => '#9333EA' },
       { label: 'Approved', width: 80, align: 'right' as const, color: () => '#00A651' },
       { label: 'Progress', width: 80, align: 'right' as const },
     ]
@@ -135,9 +139,11 @@ export default function ProgressPage() {
       columns: cols,
       rows,
       cell: (p: any, ci: number) => {
+        const rejCell = p.rejected == null ? '—' : num(p.rejected)
+        const revCell = p.revoked == null ? '—' : num(p.revoked)
         const base = petugasKec
-          ? [String(p._no), p.nama_ppl, p.nama_pml, p.nmkec, num(p.total), draftCell(p), num(p.selesai_cacah), num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
-          : [String(p._no), p.nama_ppl, p.nama_pml, num(p.total), draftCell(p), num(p.selesai_cacah), num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
+          ? [String(p._no), p.nama_ppl, p.nama_pml, p.nmkec, num(p.total), draftCell(p), num(p.selesai_cacah), rejCell, revCell, num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
+          : [String(p._no), p.nama_ppl, p.nama_pml, num(p.total), draftCell(p), num(p.selesai_cacah), rejCell, revCell, num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
         return base[ci]
       },
     })
@@ -223,8 +229,8 @@ export default function ProgressPage() {
 
   const exportCsv = () => {
     const rows = [
-      'Kecamatan,Target,Realisasi,Persentase,Status',
-      ...progress.map((k: any) => `${k.nmkec ?? k.kecamatan},${k.target_usaha},${k.realisasi},${k.persentase}%,${k.status}`),
+      'Kecamatan,Target,Draft,Selesai Cacah,Rejected,Revoked,Approved,Persentase,Status',
+      ...progress.map((k: any) => `${k.nmkec ?? k.kecamatan},${k.target_usaha},${k.fasih?.draft ?? 0},${k.realisasi},${k.fasih?.rejected ?? 0},${k.fasih?.revoked ?? 0},${k.fasih?.selesai_approve ?? 0},${k.persentase}%,${k.status}`),
     ]
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `progress-se2026${skala ? `-${skala}` : ''}.csv`; a.click()
@@ -461,9 +467,14 @@ export default function ProgressPage() {
           {/* Tabel detail */}
           <div style={{ background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', overflow: 'hidden', boxShadow: '0 2px 16px rgba(232,117,26,.07)' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>
-                Rekap Progress per Kecamatan
-              </h3>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>
+                  Rekap Progress per Kecamatan
+                </h3>
+                <p style={{ fontSize: 11, color: '#8C7B6B', margin: '4px 0 0' }}>
+                  <strong>Selesai Cacah</strong> = Submitted + Approved + <span style={{ color: '#E8192C' }}>Rejected</span> + <span style={{ color: '#9333EA' }}>Revoked</span> (semua sudah dicacah). Draft belum dihitung selesai.
+                </p>
+              </div>
               <button onClick={exportCsv} style={{ padding: '8px 18px', borderRadius: 8, background: 'transparent', color: '#E8751A', border: '1.5px solid #E8751A', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>⬇ Export CSV</button>
             </div>
             <div style={{ overflowX: 'auto' }}>
@@ -475,6 +486,8 @@ export default function ProgressPage() {
                       { key: 'target_usaha' as const, label: 'Target Assignment' },
                       { key: 'draft' as const, label: 'Draft' },
                       { key: 'realisasi' as const, label: 'Selesai Cacah' },
+                      { key: 'rejected' as const, label: 'Rejected' },
+                      { key: 'revoked' as const, label: 'Revoked' },
                       { key: 'approved' as const, label: 'Approved' },
                       { key: 'persentase' as const, label: 'Progress' },
                       { key: 'status' as const, label: 'Status' },
@@ -488,10 +501,10 @@ export default function ProgressPage() {
                 </thead>
                 <tbody>
                   {!progressLoaded && (
-                    <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</td></tr>
+                    <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</td></tr>
                   )}
                   {progressLoaded && filtered.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</td></tr>
+                    <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</td></tr>
                   )}
                   {filtered.map((k: any, i: number) => (
                     <tr key={k.id ?? k.kdkec ?? k.kecamatan} style={{ background: i % 2 === 1 ? '#FAFAFA' : 'white' }} className="tbl-row">
@@ -500,7 +513,13 @@ export default function ProgressPage() {
                       <td style={{ padding: '12px 14px', fontSize: 13 }} title="Sudah dicacah tapi belum disubmit (tidak dihitung selesai)">
                         <span style={{ color: '#1877F2', fontWeight: 700 }}>{(k.fasih?.draft ?? 0).toLocaleString('id-ID')}</span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#3D3D3D' }}>{k.realisasi.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#3D3D3D', fontWeight: 700 }} title="Sudah dicacah (submitted + approved + rejected + revoked)">{k.realisasi.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 13 }} title="Ditolak pengawas — sudah dicacah, masuk hitungan selesai cacah">
+                        <span style={{ color: '#E8192C', fontWeight: 700 }}>{(k.fasih?.rejected ?? 0).toLocaleString('id-ID')}</span>
+                      </td>
+                      <td style={{ padding: '12px 14px', fontSize: 13 }} title="Revoked pengawas (approve → revoked, menuju reject) — sudah dicacah, masuk hitungan selesai cacah">
+                        <span style={{ color: '#9333EA', fontWeight: 700 }}>{(k.fasih?.revoked ?? 0).toLocaleString('id-ID')}</span>
+                      </td>
                       <td style={{ padding: '12px 14px', fontSize: 13 }}>
                         <span style={{ color: '#00A651', fontWeight: 700 }}>{(k.fasih?.selesai_approve ?? 0).toLocaleString('id-ID')}</span>
                         {k.fasih && <span style={{ color: '#8C7B6B', fontSize: 11 }}> ({k.fasih.pct_approve.toFixed(1)}%)</span>}
@@ -572,6 +591,8 @@ export default function ProgressPage() {
                       { label: 'Target', key: 'total' },
                       { label: 'Draft', key: 'draft' },
                       { label: isWeekMode ? 'Cacah Minggu Ini' : 'Selesai Cacah', key: 'selesai_cacah' },
+                      { label: 'Rejected', key: 'rejected' },
+                      { label: 'Revoked', key: 'revoked' },
                       { label: isWeekMode ? 'Approved Minggu Ini' : 'Approved', key: 'selesai_approve' },
                       { label: isWeekMode ? 'Kontribusi' : 'Progress', key: 'pct_cacah' },
                       { label: 'Aksi', key: null },
@@ -585,7 +606,7 @@ export default function ProgressPage() {
                 </thead>
                 <tbody>
                   {filteredPetugas.length === 0 && (
-                    <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>{isWeekMode ? `Belum ada progres petugas pada ${petugasWeekLabel || 'minggu ini'}.` : 'Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.'}</td></tr>
+                    <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>{isWeekMode ? `Belum ada progres petugas pada ${petugasWeekLabel || 'minggu ini'}.` : 'Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.'}</td></tr>
                   )}
                   {filteredPetugas.map((p: any, i: number) => (
                     <tr key={(p.nama_ppl ?? '') + i} style={{ background: isWeekRank && i < 3 ? '#FFF7EF' : (i % 2 ? '#FAFAFA' : 'white') }} className="tbl-row">
@@ -597,7 +618,9 @@ export default function ProgressPage() {
                       {petugasKec && <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nmkec}</td>}
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D' }}>{p.total.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#1877F2', fontWeight: 700 }} title={isWeekMode ? 'Draft per-minggu tidak tersedia' : 'Sudah dicacah belum disubmit (tidak dihitung selesai)'}>{p.draft == null ? '—' : (p.draft).toLocaleString('id-ID')}</td>
-                      <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#C85E0A' }}>{p.selesai_cacah.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#C85E0A' }} title="Sudah dicacah (submitted + approved + rejected + revoked)">{p.selesai_cacah.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#E8192C', fontWeight: 700 }} title="Ditolak pengawas — sudah dicacah, masuk hitungan selesai cacah">{p.rejected == null ? '—' : (p.rejected).toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#9333EA', fontWeight: 700 }} title="Revoked pengawas — sudah dicacah, masuk hitungan selesai cacah">{p.revoked == null ? '—' : (p.revoked).toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#00A651', fontWeight: 700 }}>{p.selesai_approve.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', minWidth: 130 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -9,7 +9,7 @@ import type { ProgressBreakdown, SkalaUsaha } from '@/types'
 
 export interface FasihInfo {
   open: number; draft: number; submitted: number
-  approved: number; rejected: number
+  approved: number; rejected: number; revoked?: number
   selesai_cacah: number; pct_cacah: number
   selesai_approve: number; pct_approve: number
 }
@@ -46,6 +46,7 @@ export function buildKecamatanTooltipHtml({
       <div style="display:flex;justify-content:space-between;gap:12px"><span style="opacity:.7">Open / Draft</span><span>${fasih.open.toLocaleString('id-ID')} / ${fasih.draft.toLocaleString('id-ID')}</span></div>
       <div style="display:flex;justify-content:space-between;gap:12px"><span style="opacity:.7">Submitted</span><span>${fasih.submitted.toLocaleString('id-ID')}</span></div>
       ${fasih.rejected ? `<div style="display:flex;justify-content:space-between;gap:12px"><span style="opacity:.7;color:#E8192C">Rejected</span><span style="color:#E8192C">${fasih.rejected.toLocaleString('id-ID')}</span></div>` : ''}
+      ${fasih.revoked ? `<div style="display:flex;justify-content:space-between;gap:12px"><span style="opacity:.7;color:#9333EA">Revoked</span><span style="color:#9333EA">${fasih.revoked.toLocaleString('id-ID')}</span></div>` : ''}
     </div>`
     return `<div><div style="font-weight:700;font-size:13px;margin-bottom:4px;color:#1A1A1A">${nama}</div>${body}</div>`
   }
@@ -82,6 +83,7 @@ export default function KecamatanTooltip(p: Props) {
           <Row label="Open / Draft" value={`${fasih.open.toLocaleString('id-ID')} / ${fasih.draft.toLocaleString('id-ID')}`} />
           <Row label="Submitted" value={fasih.submitted.toLocaleString('id-ID')} />
           {fasih.rejected > 0 && <Row label="Rejected" value={fasih.rejected.toLocaleString('id-ID')} danger />}
+          {(fasih.revoked ?? 0) > 0 && <Row label="Revoked" value={(fasih.revoked ?? 0).toLocaleString('id-ID')} purple />}
         </div>
       ) : !skalaFilter && breakdown && (
         <div style={{ borderTop: '1px solid rgba(0,0,0,.08)', marginTop: 8, paddingTop: 8, fontSize: 11, lineHeight: 1.7 }}>
@@ -105,11 +107,12 @@ export default function KecamatanTooltip(p: Props) {
   )
 }
 
-function Row({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+function Row({ label, value, danger, purple }: { label: string; value: string; danger?: boolean; purple?: boolean }) {
+  const c = danger ? '#E8192C' : purple ? '#9333EA' : undefined
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-      <span style={{ opacity: .7, color: danger ? '#E8192C' : undefined }}>{label}</span>
-      <span style={{ color: danger ? '#E8192C' : undefined }}><b>{value}</b></span>
+      <span style={{ opacity: .7, color: c }}>{label}</span>
+      <span style={{ color: c }}><b>{value}</b></span>
     </div>
   )
 }
