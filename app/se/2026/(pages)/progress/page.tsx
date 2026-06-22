@@ -446,45 +446,18 @@ export default function ProgressPage() {
               })()}
             </div>
 
-            <div>
-              {/* Donut komposisi status se-kabupaten (estetik, di atas ranking) */}
-              {progressLoaded && hasStatus && (
-                <StatusDonut open={kab.open} draft={kab.draft} submitted={kab.submitted} approved={kab.approved} rejected={kab.rejected} revoked={kab.revoked} total={kab.total} cacah={kab.cacah} />
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>Ranking Kecamatan</h2>
-                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari…" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, width: 120, outline: 'none' }} />
-              </div>
-              <div style={{ background: 'white', borderRadius: 12, border: '1px solid #EDE3D8', overflow: 'hidden', maxHeight: 480, overflowY: 'auto' }}>
+            {/* Komposisi status — sejajar & setinggi peta. Ranking dipindah ke
+                tabel Rekap di bawah (kolom Target/Cacah/Progress di-highlight). */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', marginBottom: 16 }}>Komposisi Status Assignment</h2>
+              <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
                 {!progressLoaded ? (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</div>
-                ) : filtered.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</div>
-                ) : filtered.sort((a: any, b: any) => b.persentase - a.persentase).map((k: any, i: number) => (
-                  <button key={k.id ?? k.kdkec ?? k.kecamatan}
-                    onClick={() => k.kdkec && setDrilledKec({ kdkec: k.kdkec, nmkec: k.nmkec ?? k.kecamatan })}
-                    style={{ width: '100%', padding: '12px 16px', borderBottom: '1px solid #EDE3D8', display: 'flex', flexDirection: 'column', gap: 6, background: 'none', border: 'none', cursor: k.kdkec ? 'pointer' : 'default', textAlign: 'left' as const }}
-                    className="rank-row"
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
-                      <span style={{ width: 24, height: 24, borderRadius: '50%', background: i < 3 ? '#E8751A' : '#F5EDE0', color: i < 3 ? 'white' : '#6B6B6B', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1A1A', marginBottom: 4 }}>{k.nmkec ?? k.kecamatan}</div>
-                        <div style={{ height: 6, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', background: '#E8751A', width: `${k.persentase}%`, borderRadius: 99, transition: 'width .6s ease' }} />
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#E8751A', flexShrink: 0 }}>{k.persentase}%</span>
-                    </div>
-                    {k.fasih ? (
-                      <div style={{ display: 'flex', gap: 8, paddingLeft: 36, fontSize: 10, fontWeight: 600 }}>
-                        <span style={{ color: '#C85E0A' }}>Cacah {k.realisasi.toLocaleString('id-ID')}/{k.target_usaha.toLocaleString('id-ID')}</span>
-                        <span style={{ color: '#8C7B6B' }}>·</span>
-                        <span style={{ color: '#00A651' }}>Approved {k.fasih.selesai_approve.toLocaleString('id-ID')}</span>
-                      </div>
-                    ) : null}
-                  </button>
-                ))}
+                  <div style={{ flex: 1, background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data…</div>
+                ) : hasStatus ? (
+                  <StatusDonut open={kab.open} draft={kab.draft} submitted={kab.submitted} approved={kab.approved} rejected={kab.rejected} revoked={kab.revoked} total={kab.total} cacah={kab.cacah} />
+                ) : (
+                  <div style={{ flex: 1, background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, color: '#8C7B6B', fontSize: 13, fontStyle: 'italic', textAlign: 'center', padding: 24 }}>Komposisi status akan muncul setelah data Fasih masuk.</div>
+                )}
               </div>
             </div>
           </div>
@@ -494,31 +467,35 @@ export default function ProgressPage() {
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
               <div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>
-                  Rekap Progress per Kecamatan
+                  Rekap &amp; Peringkat per Kecamatan
                 </h3>
-                <p style={{ fontSize: 11, color: '#8C7B6B', margin: '4px 0 0' }}>
-                  <strong>Selesai Cacah</strong> = Submitted + Approved + <span style={{ color: '#E8192C' }}>Rejected</span> + <span style={{ color: '#9333EA' }}>Revoked</span> (semua sudah dicacah). Draft belum dihitung selesai.
+                <p style={{ fontSize: 11, color: '#8C7B6B', margin: '4px 0 0', maxWidth: 620 }}>
+                  Klik judul kolom untuk urutkan (default: <strong style={{ color: '#E8751A' }}>Progress</strong> tertinggi = peringkat 1). <strong>Selesai Cacah</strong> = Submitted + Approved + <span style={{ color: '#E8192C' }}>Rejected</span> + <span style={{ color: '#9333EA' }}>Revoked</span>; Draft belum dihitung selesai.
                 </p>
               </div>
-              <button onClick={exportCsv} style={{ padding: '8px 18px', borderRadius: 8, background: 'transparent', color: '#E8751A', border: '1.5px solid #E8751A', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>⬇ Export CSV</button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari kecamatan…" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, width: 150, outline: 'none' }} />
+                <button onClick={exportCsv} style={{ padding: '8px 18px', borderRadius: 8, background: 'transparent', color: '#E8751A', border: '1.5px solid #E8751A', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>⬇ Export CSV</button>
+              </div>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: '#FDF6EE' }}>
                     {[
-                      { key: 'kecamatan' as const, label: 'Kecamatan' },
-                      { key: 'target_usaha' as const, label: 'Target Assignment' },
-                      { key: 'draft' as const, label: 'Draft' },
-                      { key: 'realisasi' as const, label: 'Selesai Cacah' },
-                      { key: 'rejected' as const, label: 'Rejected' },
-                      { key: 'revoked' as const, label: 'Revoked' },
-                      { key: 'approved' as const, label: 'Approved' },
-                      { key: 'persentase' as const, label: 'Progress' },
-                      { key: 'status' as const, label: 'Status' },
+                      { key: null, label: '#', hot: false },
+                      { key: 'kecamatan', label: 'Kecamatan', hot: false },
+                      { key: 'target_usaha', label: 'Target Assignment', hot: true },
+                      { key: 'draft', label: 'Draft', hot: false },
+                      { key: 'realisasi', label: 'Selesai Cacah', hot: true },
+                      { key: 'rejected', label: 'Rejected', hot: false },
+                      { key: 'revoked', label: 'Revoked', hot: false },
+                      { key: 'approved', label: 'Approved', hot: false },
+                      { key: 'persentase', label: 'Progress', hot: true },
+                      { key: 'status', label: 'Status', hot: false },
                     ].map(col => (
                       <th key={col.label} onClick={() => col.key && handleSort(col.key as SortKey)}
-                          style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: '1px solid #EDE3D8', cursor: col.key ? 'pointer' : 'default', whiteSpace: 'nowrap' as const }}>
+                          style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: col.hot ? 800 : 700, color: col.hot ? '#C85E0A' : '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: col.hot ? '2px solid #E8751A' : '1px solid #EDE3D8', cursor: col.key ? 'pointer' : 'default', whiteSpace: 'nowrap' as const, background: col.hot ? '#FFEAD5' : 'transparent' }}>
                         {col.label} {col.key === sortBy ? (sortDir === 'desc' ? '↓' : '↑') : ''}
                       </th>
                     ))}
@@ -526,19 +503,25 @@ export default function ProgressPage() {
                 </thead>
                 <tbody>
                   {!progressLoaded && (
-                    <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</td></tr>
+                    <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</td></tr>
                   )}
                   {progressLoaded && filtered.length === 0 && (
-                    <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</td></tr>
+                    <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</td></tr>
                   )}
-                  {filtered.map((k: any, i: number) => (
+                  {filtered.map((k: any, i: number) => {
+                    const hot = { background: i % 2 === 1 ? '#FFF3E6' : '#FFF8F1' }  // band highlight kolom kunci
+                    const isRank = sortDir === 'desc' && (sortBy === 'persentase' || sortBy === 'realisasi' || sortBy === 'target_usaha')
+                    return (
                     <tr key={k.id ?? k.kdkec ?? k.kecamatan} style={{ background: i % 2 === 1 ? '#FAFAFA' : 'white' }} className="tbl-row">
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{ width: 24, height: 24, borderRadius: '50%', background: isRank && i < 3 ? '#E8751A' : '#F5EDE0', color: isRank && i < 3 ? 'white' : '#6B6B6B', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
+                      </td>
                       <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{k.nmkec ?? k.kecamatan}</td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#3D3D3D' }}>{k.target_usaha.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 14, color: '#1A1A1A', fontWeight: 800, ...hot }}>{k.target_usaha.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '12px 14px', fontSize: 13 }} title="Sudah dicacah tapi belum disubmit (tidak dihitung selesai)">
                         <span style={{ color: '#1877F2', fontWeight: 700 }}>{(k.fasih?.draft ?? 0).toLocaleString('id-ID')}</span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13, color: '#3D3D3D', fontWeight: 700 }} title="Sudah dicacah (submitted + approved + rejected + revoked)">{k.realisasi.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '12px 14px', fontSize: 14, color: '#C85E0A', fontWeight: 800, ...hot }} title="Sudah dicacah (submitted + approved + rejected + revoked)">{k.realisasi.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '12px 14px', fontSize: 13 }} title="Ditolak pengawas — sudah dicacah, masuk hitungan selesai cacah">
                         <span style={{ color: '#E8192C', fontWeight: 700 }}>{(k.fasih?.rejected ?? 0).toLocaleString('id-ID')}</span>
                       </td>
@@ -549,12 +532,12 @@ export default function ProgressPage() {
                         <span style={{ color: '#00A651', fontWeight: 700 }}>{(k.fasih?.selesai_approve ?? 0).toLocaleString('id-ID')}</span>
                         {k.fasih && <span style={{ color: '#8C7B6B', fontSize: 11 }}> ({k.fasih.pct_approve.toFixed(1)}%)</span>}
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td style={{ padding: '12px 14px', ...hot }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ flex: 1, height: 6, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
-                            <div style={{ height: '100%', background: '#E8751A', width: `${k.persentase}%`, borderRadius: 99 }} />
+                          <div style={{ flex: 1, height: 7, background: '#FFE2C2', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
+                            <div style={{ height: '100%', background: 'linear-gradient(90deg,#E8751A,#F5A623)', width: `${k.persentase}%`, borderRadius: 99 }} />
                           </div>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#E8751A', minWidth: 34 }}>{k.persentase}%</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#C85E0A', minWidth: 38 }}>{k.persentase}%</span>
                         </div>
                       </td>
                       <td style={{ padding: '12px 14px' }}>
@@ -567,7 +550,7 @@ export default function ProgressPage() {
                         </span>
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
