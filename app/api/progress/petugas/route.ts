@@ -86,8 +86,8 @@ export async function GET(req: NextRequest) {
       const petugas = [...byP.values()].map(o => ({
         nama_ppl: o.nama_ppl || '—', nama_pml: o.nama_pml || '—',
         nmkec: kec ? (namaMap.get(String(o.kode_kec)) ?? '') : '',
-        total: o.total, draft: null,            // draft/rejected/revoked per-minggu tidak tersedia di snapshot harian
-        rejected: null, revoked: null,
+        total: o.total, draft: null,            // rincian status per-minggu tak tersedia di snapshot harian
+        submitted: null, rejected: null, revoked: null,
         selesai_cacah: o.cacah, selesai_approve: o.approve,
         pct_cacah: pct(o.cacah, o.total), pct_approve: pct(o.approve, o.total),
       })).sort((a, b) => b.selesai_cacah - a.selesai_cacah)
@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
     const [rows] = await pool.execute(
       `SELECT MAX(nama_ppl) AS nama_ppl, MAX(nama_pml) AS nama_pml, ${kecCol},
               SUM(total) AS total, SUM(draft) AS draft,
+              SUM(submitted_pencacah + submitted_responden) AS submitted,
               SUM(rejected) AS rejected, SUM(revoked) AS revoked,
               SUM(selesai_cacah) AS selesai_cacah, SUM(selesai_approve) AS selesai_approve
        FROM fasih_subsls
@@ -117,7 +118,8 @@ export async function GET(req: NextRequest) {
       return {
         nama_ppl: r.nama_ppl || '—', nama_pml: r.nama_pml || '—',
         nmkec: kec ? (namaMap.get(String(r.kode_kec)) ?? '') : '',
-        total, draft: Number(r.draft), rejected: Number(r.rejected), revoked: Number(r.revoked),
+        total, draft: Number(r.draft), submitted: Number(r.submitted),
+        rejected: Number(r.rejected), revoked: Number(r.revoked),
         selesai_cacah: cacah, selesai_approve: approve,
         pct_cacah: pct(cacah, total), pct_approve: pct(approve, total),
       }
