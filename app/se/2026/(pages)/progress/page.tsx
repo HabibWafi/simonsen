@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import WaveLoop from '@/components/decor/WaveLoop'
 import KecamatanTooltip from '@/components/KecamatanTooltip'
+import StatusDonut from '@/components/StatusDonut'
 import LiveUpdateBadge from '@/components/LiveUpdateBadge'
 import { withBase } from '@/lib/basePath'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -222,6 +223,26 @@ export default function ProgressPage() {
       return mult * (av < bv ? -1 : av > bv ? 1 : 0)
     })
 
+  // Agregat status se-kabupaten (selalu dari seluruh progress, bukan hasil search) untuk donut.
+  const kab = (() => {
+    let open = 0, draft = 0, submitted = 0, approved = 0, rejected = 0, revoked = 0, total = 0, cacah = 0
+    for (const k of progress) {
+      total += Number(k.target_usaha) || 0
+      cacah += Number(k.realisasi) || 0
+      const f = k.fasih
+      if (f) {
+        open += Number(f.open) || 0
+        draft += Number(f.draft) || 0
+        submitted += (Number(f.submitted) || 0) + (Number(f.submitted_responden) || 0)
+        approved += Number(f.approved) || 0
+        rejected += Number(f.rejected) || 0
+        revoked += Number(f.revoked) || 0
+      }
+    }
+    return { open, draft, submitted, approved, rejected, revoked, total, cacah }
+  })()
+  const hasStatus = (kab.open + kab.draft + kab.submitted + kab.approved + kab.rejected + kab.revoked) > 0
+
   const handleSort = (key: SortKey) => {
     if (sortBy === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
     else { setSortBy(key); setSortDir('desc') }
@@ -426,6 +447,10 @@ export default function ProgressPage() {
             </div>
 
             <div>
+              {/* Donut komposisi status se-kabupaten (estetik, di atas ranking) */}
+              {progressLoaded && hasStatus && (
+                <StatusDonut open={kab.open} draft={kab.draft} submitted={kab.submitted} approved={kab.approved} rejected={kab.rejected} revoked={kab.revoked} total={kab.total} cacah={kab.cacah} />
+              )}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A' }}>Ranking Kecamatan</h2>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari…" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, width: 120, outline: 'none' }} />
