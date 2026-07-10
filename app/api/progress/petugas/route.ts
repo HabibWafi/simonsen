@@ -85,9 +85,9 @@ export async function GET(req: NextRequest) {
 
       const petugas = [...byP.values()].map(o => ({
         nama_ppl: o.nama_ppl || '—', nama_pml: o.nama_pml || '—',
-        nmkec: kec ? (namaMap.get(String(o.kode_kec)) ?? '') : '',
+        nmkec: namaMap.get(String(o.kode_kec)) ?? String(o.kode_kec),
         total: o.total, draft: null,            // rincian status per-minggu tak tersedia di snapshot harian
-        submitted: null, rejected: null, revoked: null,
+        submitted: null, rejected: null, revoked: null, edited_pengawas: null,
         selesai_cacah: o.cacah, selesai_approve: o.approve,
         pct_cacah: pct(o.cacah, o.total), pct_approve: pct(o.approve, o.total),
       })).sort((a, b) => b.selesai_cacah - a.selesai_cacah)
@@ -96,19 +96,19 @@ export async function GET(req: NextRequest) {
     }
 
     // ── MODE SELURUH WAKTU: kondisi cumulative terkini (fasih_subsls) ──
+    // SELALU grup per (pencacah, kode_kec) → kolom Kecamatan selalu terisi.
     const params: any[] = []
-    let groupBy = 'pencacah'
-    let kecCol = `'' AS kode_kec`
-    if (kec) { params.push(kec); groupBy = 'pencacah, kode_kec'; kecCol = 'kode_kec' }
+    if (kec) params.push(kec)
     const [rows] = await pool.execute(
-      `SELECT MAX(nama_ppl) AS nama_ppl, MAX(nama_pml) AS nama_pml, ${kecCol},
+      `SELECT MAX(nama_ppl) AS nama_ppl, MAX(nama_pml) AS nama_pml, kode_kec,
               SUM(total) AS total, SUM(draft) AS draft,
               SUM(submitted_pencacah + submitted_responden) AS submitted,
               SUM(rejected) AS rejected, SUM(revoked) AS revoked,
+              SUM(edited_pengawas) AS edited_pengawas,
               SUM(selesai_cacah) AS selesai_cacah, SUM(selesai_approve) AS selesai_approve
        FROM fasih_subsls
        WHERE pencacah IS NOT NULL AND pencacah <> '' ${kec ? 'AND kode_kec = ?' : ''}
-       GROUP BY ${groupBy}
+       GROUP BY pencacah, kode_kec
        ORDER BY selesai_cacah DESC`,
       params,
     ) as [any[], any]
@@ -117,9 +117,9 @@ export async function GET(req: NextRequest) {
       const total = Number(r.total), cacah = Number(r.selesai_cacah), approve = Number(r.selesai_approve)
       return {
         nama_ppl: r.nama_ppl || '—', nama_pml: r.nama_pml || '—',
-        nmkec: kec ? (namaMap.get(String(r.kode_kec)) ?? '') : '',
+        nmkec: namaMap.get(String(r.kode_kec)) ?? String(r.kode_kec),
         total, draft: Number(r.draft), submitted: Number(r.submitted),
-        rejected: Number(r.rejected), revoked: Number(r.revoked),
+        rejected: Number(r.rejected), revoked: Number(r.revoked), edited_pengawas: Number(r.edited_pengawas),
         selesai_cacah: cacah, selesai_approve: approve,
         pct_cacah: pct(cacah, total), pct_approve: pct(approve, total),
       }

@@ -70,7 +70,8 @@ export async function GET(req: NextRequest) {
   try {
     // ---- Sumber utama: fasih_sls ----
     const [fasihRows] = await pool.execute(
-      `SELECT kode_sls, total, open, draft, submitted_pencacah, approved, rejected,
+      `SELECT kode_sls, total, open, draft, submitted_pencacah, submitted_responden,
+              approved, rejected, revoked, edited_pengawas, completed_admin, edited_admin,
               selesai_cacah, selesai_approve
        FROM fasih_sls WHERE kode_desa = ? ORDER BY selesai_cacah DESC`,
       [iddesa],
@@ -97,7 +98,10 @@ export async function GET(req: NextRequest) {
           breakdown: null,
           fasih: {
             open: Number(r.open), draft: Number(r.draft), submitted: Number(r.submitted_pencacah),
-            approved: Number(r.approved), rejected: Number(r.rejected),
+            submitted_responden: Number(r.submitted_responden),
+            approved: Number(r.approved), rejected: Number(r.rejected), revoked: Number(r.revoked),
+            completed_admin: Number(r.completed_admin), edited_admin: Number(r.edited_admin),
+            edited_pengawas: Number(r.edited_pengawas),
             selesai_cacah: cacah, pct_cacah: pctF(cacah, total),
             selesai_approve: approve, pct_approve: pctF(approve, total),
           },

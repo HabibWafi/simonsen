@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const [fasih] = await pool.execute(
-      `SELECT kode_desa, kode_kec, total, open, draft, submitted_pencacah, approved, rejected,
+      `SELECT kode_desa, kode_kec, total, open, draft, submitted_pencacah, submitted_responden,
+              approved, rejected, revoked, edited_pengawas, completed_admin, edited_admin,
               selesai_cacah, selesai_approve
        FROM fasih_desa WHERE kode_kec = ? ORDER BY selesai_cacah DESC`,
       [kdkec],
@@ -43,7 +44,10 @@ export async function GET(req: NextRequest) {
           breakdown: null,
           fasih: {
             open: Number(r.open), draft: Number(r.draft), submitted: Number(r.submitted_pencacah),
-            approved: Number(r.approved), rejected: Number(r.rejected),
+            submitted_responden: Number(r.submitted_responden),
+            approved: Number(r.approved), rejected: Number(r.rejected), revoked: Number(r.revoked),
+            completed_admin: Number(r.completed_admin), edited_admin: Number(r.edited_admin),
+            edited_pengawas: Number(r.edited_pengawas),
             selesai_cacah: cacah, pct_cacah: pct(cacah, total),
             selesai_approve: approve, pct_approve: pct(approve, total),
           },

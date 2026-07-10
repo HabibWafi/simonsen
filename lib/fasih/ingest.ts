@@ -27,7 +27,9 @@ export interface IngestMeta {
 // Kolom metrik wilayah (urut sesuai INSERT)
 const METRIK = [
   'total', 'open', 'draft', 'submitted_pencacah', 'submitted_responden',
-  'approved', 'rejected', 'revoked', 'selesai_cacah', 'selesai_approve',
+  'approved', 'rejected', 'revoked',
+  'completed_admin', 'edited_admin', 'edited_pengawas',   // status admin kab (bot v9.6)
+  'selesai_cacah', 'selesai_approve',
   'pct_cacah', 'pct_approve',
 ] as const
 
@@ -55,6 +57,9 @@ function metrikValues(r: Record<string, any>): number[] {
     num(pick(r, 'approved', 'APPROVED BY Pengawas', 'approved_by_pengawas')),
     num(pick(r, 'rejected', 'REJECTED BY Pengawas', 'rejected_by_pengawas')),
     num(pick(r, 'revoked', 'REVOKED BY Pengawas', 'revoked_by_pengawas')),
+    num(pick(r, 'completed_admin', 'COMPLETED BY Admin Kabupaten', 'completed_by_admin')),
+    num(pick(r, 'edited_admin', 'EDITED BY Admin Kabupaten', 'edited_by_admin')),
+    num(pick(r, 'edited_pengawas', 'EDITED BY Pengawas', 'edited_by_pengawas')),
     num(pick(r, 'selesai_cacah')),
     num(pick(r, 'selesai_approve')),
     num(pick(r, 'pct_cacah')),

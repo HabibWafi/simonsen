@@ -29,18 +29,19 @@ const MapSls = dynamic(() => import('@/components/MapSls'), {
 })
 
 type Skala = '' | 'UMK' | 'UM' | 'UB'
-type SortKey = 'kecamatan' | 'target_usaha' | 'draft' | 'realisasi' | 'submitted' | 'rejected' | 'revoked' | 'approved' | 'persentase' | 'status'
+type SortKey = 'kecamatan' | 'target_usaha' | 'draft' | 'realisasi' | 'submitted' | 'rejected' | 'revoked' | 'edited_pengawas' | 'approved' | 'persentase' | 'status'
 
 function rekapSortVal(k: any, key: SortKey): string | number {
   switch (key) {
-    case 'kecamatan': return (k.nmkec ?? k.kecamatan ?? '').toLowerCase()
-    case 'draft':     return Number(k.fasih?.draft ?? 0)
-    case 'submitted': return Number(k.fasih?.submitted ?? 0) + Number(k.fasih?.submitted_responden ?? 0)
-    case 'rejected':  return Number(k.fasih?.rejected ?? 0)
-    case 'revoked':   return Number(k.fasih?.revoked ?? 0)
-    case 'approved':  return Number(k.fasih?.selesai_approve ?? 0)
-    case 'status':    return String(k.status ?? '')
-    default:          return Number(k[key] ?? 0)
+    case 'kecamatan':      return (k.nmkec ?? k.kecamatan ?? '').toLowerCase()
+    case 'draft':          return Number(k.fasih?.draft ?? 0)
+    case 'submitted':      return Number(k.fasih?.submitted ?? 0) + Number(k.fasih?.submitted_responden ?? 0)
+    case 'rejected':       return Number(k.fasih?.rejected ?? 0)
+    case 'revoked':        return Number(k.fasih?.revoked ?? 0)
+    case 'edited_pengawas': return Number(k.fasih?.edited_pengawas ?? 0)
+    case 'approved':       return Number(k.fasih?.selesai_approve ?? 0)
+    case 'status':         return String(k.status ?? '')
+    default:               return Number(k[key] ?? 0)
   }
 }
 
@@ -85,6 +86,52 @@ export default function ProgressPage() {
   const [miniPetugas, setMiniPetugas] = useState<{ kec: string; nama: string; nmkec: string } | null>(null)
   const [pgSort, setPgSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'selesai_cacah', dir: 'desc' })
 
+  // Monitoring pengawas (PML) — publik, tanpa email
+  const [pengawas, setPengawas] = useState<any[]>([])
+  const [pengawasKec, setPengawasKec] = useState('')
+  const [pengawasKecList, setPengawasKecList] = useState<any[]>([])
+  const [pengawasQ, setPengawasQ] = useState('')
+  const [pgwSort, setPgwSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'selesai_cacah', dir: 'desc' })
+  const pgwSortVal = (p: any, key: string): string | number =>
+    (key === 'nama_pml' || key === 'nmkec') ? String(p[key] ?? '').toLowerCase() : Number(p[key] ?? 0)
+  const pgwClickSort = (key: string) => setPgwSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' })
+  const filteredPengawas = pengawas
+    .filter((p: any) => !pengawasQ || (p.nama_pml ?? '').toLowerCase().includes(pengawasQ.toLowerCase()))
+    .sort((a: any, b: any) => {
+      const m = pgwSort.dir === 'desc' ? -1 : 1
+      const av = pgwSortVal(a, pgwSort.key), bv = pgwSortVal(b, pgwSort.key)
+      return m * (av < bv ? -1 : av > bv ? 1 : 0)
+    })
+  function exportPengawasCsv() {
+    const headers = ['No', 'Pengawas (PML)', 'Kecamatan', 'Jumlah PPL', 'Total Assignment', 'Submitted', 'Approved & Final', 'Rejected', 'Revoked', 'Edited Pengawas', 'Selesai Cacah', 'Progress %']
+    const rows = filteredPengawas.map((p: any, i: number) => [i + 1, p.nama_pml, p.nmkec, p.jumlah_ppl, p.jumlah_unit, p.submitted, p.approved, p.rejected, p.revoked, p.edited_pengawas, p.selesai_cacah, p.pct_cacah.toFixed(1)])
+    exportCsvFile(`monitoring-pengawas${pengawasKec ? '-' + (pengawasKecList.find((k: any) => k.kode_kec === pengawasKec)?.nmkec ?? '') : ''}.csv`, headers, rows as any)
+  }
+  function exportPengawasPng() {
+    const num = (v: number) => Number(v).toLocaleString('id-ID')
+    const kecLbl = pengawasKecList.find((k: any) => k.kode_kec === pengawasKec)?.nmkec
+    const cols = [
+      { label: 'No', width: 40, align: 'right' as const },
+      { label: 'Pengawas (PML)', width: 200 },
+      { label: 'Kecamatan', width: 150 },
+      { label: 'PPL', width: 55, align: 'right' as const },
+      { label: 'Unit', width: 70, align: 'right' as const },
+      { label: 'Submitted', width: 82, align: 'right' as const },
+      { label: 'Approved', width: 82, align: 'right' as const, color: () => '#00A651' },
+      { label: 'Rejected', width: 74, align: 'right' as const, color: () => '#E8192C' },
+      { label: 'Edited PML', width: 82, align: 'right' as const, color: () => '#0EA5A4' },
+      { label: 'Progress', width: 78, align: 'right' as const },
+    ]
+    const rows = filteredPengawas.map((p: any, i: number) => ({ ...p, _no: i + 1 }))
+    exportTablePng({
+      filename: `monitoring-pengawas${kecLbl ? '-' + kecLbl : ''}.png`,
+      title: 'Monitoring Progress Pengawas (PML) SE2026',
+      subtitle: `${kecLbl ? 'Kecamatan ' + kecLbl : 'Seluruh Kecamatan'} · ${filteredPengawas.length} pengawas`,
+      columns: cols, rows,
+      cell: (p: any, ci: number) => [String(p._no), p.nama_pml, p.nmkec, num(p.jumlah_ppl), num(p.jumlah_unit), num(p.submitted), num(p.approved), num(p.rejected), num(p.edited_pengawas), p.pct_cacah.toFixed(1) + '%'][ci],
+    })
+  }
+
   const pgSortVal = (p: any, key: string): string | number => {
     if (key === 'nama_ppl' || key === 'nama_pml' || key === 'nmkec') return String(p[key] ?? '').toLowerCase()
     return Number(p[key] ?? 0)
@@ -109,8 +156,8 @@ export default function ProgressPage() {
   const petugasWeekLabel = petugasWeekInfo?.label ?? petugasWeeks.find((w: any) => w.start === petugasWeek)?.label ?? ''
 
   function exportPetugasCsv() {
-    const headers = ['No', 'Petugas (PPL)', 'Pengawas (PML)', ...(petugasKec ? ['Kecamatan'] : []), 'Target', 'Draft', 'Selesai Cacah', 'Submitted', 'Rejected', 'Revoked', 'Approved', 'Progress %']
-    const rows = filteredPetugas.map((p: any, i: number) => [i + 1, p.nama_ppl, p.nama_pml, ...(petugasKec ? [p.nmkec] : []), p.total, p.draft == null ? '—' : p.draft, p.selesai_cacah, p.submitted == null ? '—' : p.submitted, p.rejected == null ? '—' : p.rejected, p.revoked == null ? '—' : p.revoked, p.selesai_approve, p.pct_cacah.toFixed(1)])
+    const headers = ['No', 'Petugas (PPL)', 'Pengawas (PML)', 'Kecamatan', 'Target', 'Draft', 'Selesai Cacah', 'Submitted', 'Rejected', 'Revoked', 'Edited Pengawas', 'Approved & Final', 'Progress %']
+    const rows = filteredPetugas.map((p: any, i: number) => [i + 1, p.nama_ppl, p.nama_pml, p.nmkec, p.total, p.draft == null ? '—' : p.draft, p.selesai_cacah, p.submitted == null ? '—' : p.submitted, p.rejected == null ? '—' : p.rejected, p.revoked == null ? '—' : p.revoked, p.edited_pengawas == null ? '—' : p.edited_pengawas, p.selesai_approve, p.pct_cacah.toFixed(1)])
     const kecLbl = petugasKecList.find((k: any) => k.kode_kec === petugasKec)?.nmkec
     const periodTag = isWeekMode ? `-minggu${petugasWeekInfo?.n ?? ''}` : ''
     exportCsvFile(`progress-petugas${kecLbl ? '-' + kecLbl : ''}${periodTag}.csv`, headers, rows as any)
@@ -120,17 +167,18 @@ export default function ProgressPage() {
     const kecLbl = petugasKecList.find((k: any) => k.kode_kec === petugasKec)?.nmkec
     const cols = [
       { label: 'No', width: 40, align: 'right' as const },
-      { label: 'Petugas (PPL)', width: 200 },
-      { label: 'Pengawas (PML)', width: 170 },
-      ...(petugasKec ? [{ label: 'Kecamatan', width: 150 }] : []),
-      { label: 'Target', width: 70, align: 'right' as const },
-      { label: 'Draft', width: 60, align: 'right' as const, color: () => '#1877F2' },
-      { label: 'Cacah', width: 70, align: 'right' as const, color: () => '#C85E0A' },
-      { label: 'Submitted', width: 80, align: 'right' as const },
-      { label: 'Rejected', width: 70, align: 'right' as const, color: () => '#E8192C' },
-      { label: 'Revoked', width: 70, align: 'right' as const, color: () => '#9333EA' },
-      { label: 'Approved', width: 80, align: 'right' as const, color: () => '#00A651' },
-      { label: 'Progress', width: 80, align: 'right' as const },
+      { label: 'Petugas (PPL)', width: 190 },
+      { label: 'Pengawas (PML)', width: 160 },
+      { label: 'Kecamatan', width: 140 },
+      { label: 'Target', width: 66, align: 'right' as const },
+      { label: 'Draft', width: 58, align: 'right' as const, color: () => '#1877F2' },
+      { label: 'Cacah', width: 66, align: 'right' as const, color: () => '#C85E0A' },
+      { label: 'Submitted', width: 78, align: 'right' as const },
+      { label: 'Rejected', width: 68, align: 'right' as const, color: () => '#E8192C' },
+      { label: 'Revoked', width: 68, align: 'right' as const, color: () => '#9333EA' },
+      { label: 'Edited PML', width: 76, align: 'right' as const, color: () => '#0EA5A4' },
+      { label: 'Approved', width: 78, align: 'right' as const, color: () => '#00A651' },
+      { label: 'Progress', width: 76, align: 'right' as const },
     ]
     const rows = filteredPetugas.map((p: any, i: number) => ({ ...p, _no: i + 1 }))
     const periodTag = isWeekMode ? `-minggu${petugasWeekInfo?.n ?? ''}` : ''
@@ -145,9 +193,8 @@ export default function ProgressPage() {
         const subCell = p.submitted == null ? '—' : num(p.submitted)
         const rejCell = p.rejected == null ? '—' : num(p.rejected)
         const revCell = p.revoked == null ? '—' : num(p.revoked)
-        const base = petugasKec
-          ? [String(p._no), p.nama_ppl, p.nama_pml, p.nmkec, num(p.total), draftCell(p), num(p.selesai_cacah), subCell, rejCell, revCell, num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
-          : [String(p._no), p.nama_ppl, p.nama_pml, num(p.total), draftCell(p), num(p.selesai_cacah), subCell, rejCell, revCell, num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
+        const edpCell = p.edited_pengawas == null ? '—' : num(p.edited_pengawas)
+        const base = [String(p._no), p.nama_ppl, p.nama_pml, p.nmkec, num(p.total), draftCell(p), num(p.selesai_cacah), subCell, rejCell, revCell, edpCell, num(p.selesai_approve), p.pct_cacah.toFixed(1) + '%']
         return base[ci]
       },
     })
@@ -218,6 +265,18 @@ export default function ProgressPage() {
     return () => { stop = true; clearInterval(id) }
   }, [petugasKec, petugasWeek])
 
+  // Monitoring pengawas (realtime + filter kecamatan)
+  useEffect(() => {
+    let stop = false
+    const load = () => {
+      fetch(`/api/progress/pengawas${pengawasKec ? `?kec=${encodeURIComponent(pengawasKec)}` : ''}`, { cache: 'no-store' })
+        .then(r => r.json()).then(j => { if (!stop) { setPengawas(j.pengawas ?? []); setPengawasKecList(j.kecamatanList ?? []) } }).catch(() => {})
+    }
+    load()
+    const id = setInterval(load, 60000)
+    return () => { stop = true; clearInterval(id) }
+  }, [pengawasKec])
+
   const filtered = progress
     .filter((k: any) => (k.nmkec ?? k.kecamatan ?? '').toLowerCase().includes(search.toLowerCase()))
     .sort((a: any, b: any) => {
@@ -227,8 +286,9 @@ export default function ProgressPage() {
     })
 
   // Agregat status se-kabupaten (selalu dari seluruh progress, bukan hasil search) untuk donut.
+  // 7 bucket: approved = selesai_approve (approved + completed/edited admin), edited_pengawas terpisah.
   const kab = (() => {
-    let open = 0, draft = 0, submitted = 0, approved = 0, rejected = 0, revoked = 0, total = 0, cacah = 0
+    let open = 0, draft = 0, submitted = 0, approved = 0, rejected = 0, revoked = 0, editedPengawas = 0, total = 0, cacah = 0
     for (const k of progress) {
       total += Number(k.target_usaha) || 0
       cacah += Number(k.realisasi) || 0
@@ -237,14 +297,15 @@ export default function ProgressPage() {
         open += Number(f.open) || 0
         draft += Number(f.draft) || 0
         submitted += (Number(f.submitted) || 0) + (Number(f.submitted_responden) || 0)
-        approved += Number(f.approved) || 0
+        approved += Number(f.selesai_approve) || 0
         rejected += Number(f.rejected) || 0
         revoked += Number(f.revoked) || 0
+        editedPengawas += Number(f.edited_pengawas) || 0
       }
     }
-    return { open, draft, submitted, approved, rejected, revoked, total, cacah }
+    return { open, draft, submitted, approved, rejected, revoked, editedPengawas, total, cacah }
   })()
-  const hasStatus = (kab.open + kab.draft + kab.submitted + kab.approved + kab.rejected + kab.revoked) > 0
+  const hasStatus = (kab.open + kab.draft + kab.submitted + kab.approved + kab.rejected + kab.revoked + kab.editedPengawas) > 0
 
   const handleSort = (key: SortKey) => {
     if (sortBy === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
@@ -253,8 +314,8 @@ export default function ProgressPage() {
 
   const exportCsv = () => {
     const rows = [
-      'Kecamatan,Target,Draft,Selesai Cacah,Submitted,Rejected,Revoked,Approved,Persentase,Status',
-      ...progress.map((k: any) => `${k.nmkec ?? k.kecamatan},${k.target_usaha},${k.fasih?.draft ?? 0},${k.realisasi},${(k.fasih?.submitted ?? 0) + (k.fasih?.submitted_responden ?? 0)},${k.fasih?.rejected ?? 0},${k.fasih?.revoked ?? 0},${k.fasih?.selesai_approve ?? 0},${k.persentase}%,${k.status}`),
+      'Kecamatan,Target,Draft,Selesai Cacah,Submitted,Rejected,Revoked,Edited Pengawas,Approved & Final,Persentase,Status',
+      ...progress.map((k: any) => `${k.nmkec ?? k.kecamatan},${k.target_usaha},${k.fasih?.draft ?? 0},${k.realisasi},${(k.fasih?.submitted ?? 0) + (k.fasih?.submitted_responden ?? 0)},${k.fasih?.rejected ?? 0},${k.fasih?.revoked ?? 0},${k.fasih?.edited_pengawas ?? 0},${k.fasih?.selesai_approve ?? 0},${k.persentase}%,${k.status}`),
     ]
     const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `progress-se2026${skala ? `-${skala}` : ''}.csv`; a.click()
@@ -457,7 +518,7 @@ export default function ProgressPage() {
                 {!progressLoaded ? (
                   <div style={{ flex: 1, background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data…</div>
                 ) : hasStatus ? (
-                  <StatusDonut open={kab.open} draft={kab.draft} submitted={kab.submitted} approved={kab.approved} rejected={kab.rejected} revoked={kab.revoked} total={kab.total} cacah={kab.cacah} />
+                  <StatusDonut open={kab.open} draft={kab.draft} submitted={kab.submitted} approved={kab.approved} rejected={kab.rejected} revoked={kab.revoked} editedPengawas={kab.editedPengawas} total={kab.total} cacah={kab.cacah} />
                 ) : (
                   <div style={{ flex: 1, background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320, color: '#8C7B6B', fontSize: 13, fontStyle: 'italic', textAlign: 'center', padding: 24 }}>Komposisi status akan muncul setelah data Fasih masuk.</div>
                 )}
@@ -472,8 +533,8 @@ export default function ProgressPage() {
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>
                   Rekap &amp; Peringkat per Kecamatan
                 </h3>
-                <p style={{ fontSize: 11, color: '#8C7B6B', margin: '4px 0 0', maxWidth: 620 }}>
-                  Klik judul kolom untuk urutkan (default: <strong style={{ color: '#E8751A' }}>Progress</strong> tertinggi = peringkat 1). <strong>Selesai Cacah</strong> = Submitted + Approved + <span style={{ color: '#E8192C' }}>Rejected</span> + <span style={{ color: '#9333EA' }}>Revoked</span>; Draft belum dihitung selesai.
+                <p style={{ fontSize: 11, color: '#8C7B6B', margin: '4px 0 0', maxWidth: 680 }}>
+                  Klik judul kolom untuk urutkan (default: <strong style={{ color: '#E8751A' }}>Progress</strong> tertinggi = peringkat 1). <strong>Selesai Cacah</strong> = Submitted + <span style={{ color: '#E8192C' }}>Rejected</span> + <span style={{ color: '#9333EA' }}>Revoked</span> + <span style={{ color: '#0EA5A4' }}>Edited Pengawas</span> + <span style={{ color: '#00A651' }}>Approved &amp; Final</span> = Total − Open − Draft.
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -494,7 +555,8 @@ export default function ProgressPage() {
                       { key: 'submitted', label: 'Submitted', hot: false },
                       { key: 'rejected', label: 'Rejected', hot: false },
                       { key: 'revoked', label: 'Revoked', hot: false },
-                      { key: 'approved', label: 'Approved', hot: false },
+                      { key: 'edited_pengawas', label: 'Edited Pengawas', hot: false },
+                      { key: 'approved', label: 'Approved & Final', hot: false },
                       { key: 'persentase', label: 'Progress', hot: true },
                       { key: 'status', label: 'Status', hot: false },
                     ].map(col => (
@@ -507,10 +569,10 @@ export default function ProgressPage() {
                 </thead>
                 <tbody>
                   {!progressLoaded && (
-                    <tr><td colSpan={11} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</td></tr>
+                    <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}><span className="spin" style={{ display: 'inline-block', marginRight: 8 }}>⏳</span>Memuat data progress…</td></tr>
                   )}
                   {progressLoaded && filtered.length === 0 && (
-                    <tr><td colSpan={11} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</td></tr>
+                    <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13, fontStyle: 'italic' }}>Belum ada data progress.</td></tr>
                   )}
                   {filtered.map((k: any, i: number) => {
                     const hot = { background: i % 2 === 1 ? '#FFF3E6' : '#FFF8F1' }  // band highlight kolom kunci
@@ -533,7 +595,10 @@ export default function ProgressPage() {
                       <td style={{ padding: '12px 14px', fontSize: 13 }} title="Revoked pengawas (approve → revoked, menuju reject) — sudah dicacah, masuk hitungan selesai cacah">
                         <span style={{ color: '#9333EA', fontWeight: 700 }}>{(k.fasih?.revoked ?? 0).toLocaleString('id-ID')}</span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: 13 }}>
+                      <td style={{ padding: '12px 14px', fontSize: 13 }} title="Diedit pengawas — sudah dicacah, masuk hitungan selesai cacah (belum di-approve)">
+                        <span style={{ color: '#0EA5A4', fontWeight: 700 }}>{(k.fasih?.edited_pengawas ?? 0).toLocaleString('id-ID')}</span>
+                      </td>
+                      <td style={{ padding: '12px 14px', fontSize: 13 }} title="Approved + finalisasi admin kabupaten (completed/edited admin)">
                         <span style={{ color: '#00A651', fontWeight: 700 }}>{(k.fasih?.selesai_approve ?? 0).toLocaleString('id-ID')}</span>
                         {k.fasih && <span style={{ color: '#8C7B6B', fontSize: 11 }}> ({k.fasih.pct_approve.toFixed(1)}%)</span>}
                       </td>
@@ -571,7 +636,7 @@ export default function ProgressPage() {
                 <p style={{ fontSize: 12, color: '#8C7B6B', margin: '4px 0 0', maxWidth: 620 }}>
                   {isWeekMode
                     ? <>Peringkat <strong>{petugasWeekLabel}</strong> — dihitung <strong>hanya</strong> dari progres minggu itu, jadi tiap minggu bisa juara berbeda. Rincian status (Submitted/Rejected/Revoked) bertanda <strong>—</strong> karena snapshot harian hanya menyimpan total cacah &amp; approve.</>
-                    : <>Realisasi pencacahan per petugas (akumulasi) — realtime. <strong>Selesai Cacah</strong> = <span style={{ color: '#3D3D3D' }}>Submitted</span> + <span style={{ color: '#E8192C' }}>Rejected</span> + <span style={{ color: '#00A651' }}>Approved</span> + <span style={{ color: '#9333EA' }}>Revoked</span>.</>}
+                    : <>Realisasi pencacahan per petugas (akumulasi) — realtime. <strong>Selesai Cacah</strong> = <span style={{ color: '#3D3D3D' }}>Submitted</span> + <span style={{ color: '#E8192C' }}>Rejected</span> + <span style={{ color: '#9333EA' }}>Revoked</span> + <span style={{ color: '#0EA5A4' }}>Edited Pengawas</span> + <span style={{ color: '#00A651' }}>Approved &amp; Final</span>.</>}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -600,14 +665,15 @@ export default function ProgressPage() {
                       { label: '#', key: null },
                       { label: 'Petugas (PPL)', key: 'nama_ppl' },
                       { label: 'Pengawas (PML)', key: 'nama_pml' },
-                      ...(petugasKec ? [{ label: 'Kecamatan', key: 'nmkec' }] : []),
+                      { label: 'Kecamatan', key: 'nmkec' },
                       { label: 'Target', key: 'total' },
                       { label: 'Draft', key: 'draft' },
                       { label: isWeekMode ? 'Cacah Minggu Ini' : 'Selesai Cacah', key: 'selesai_cacah' },
                       { label: 'Submitted', key: 'submitted' },
                       { label: 'Rejected', key: 'rejected' },
                       { label: 'Revoked', key: 'revoked' },
-                      { label: isWeekMode ? 'Approved Minggu Ini' : 'Approved', key: 'selesai_approve' },
+                      { label: 'Edited Pengawas', key: 'edited_pengawas' },
+                      { label: isWeekMode ? 'Approved Minggu Ini' : 'Approved & Final', key: 'selesai_approve' },
                       { label: isWeekMode ? 'Kontribusi' : 'Progress', key: 'pct_cacah' },
                       { label: 'Aksi', key: null },
                     ].map(c => (
@@ -620,7 +686,7 @@ export default function ProgressPage() {
                 </thead>
                 <tbody>
                   {filteredPetugas.length === 0 && (
-                    <tr><td colSpan={13} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>{isWeekMode ? `Belum ada progres petugas pada ${petugasWeekLabel || 'minggu ini'}.` : 'Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.'}</td></tr>
+                    <tr><td colSpan={14} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>{isWeekMode ? `Belum ada progres petugas pada ${petugasWeekLabel || 'minggu ini'}.` : 'Belum ada data petugas dari Fasih. Akan muncul setelah bot scraper mengirim update.'}</td></tr>
                   )}
                   {filteredPetugas.map((p: any, i: number) => (
                     <tr key={(p.nama_ppl ?? '') + i} style={{ background: isWeekRank && i < 3 ? '#FFF7EF' : (i % 2 ? '#FAFAFA' : 'white') }} className="tbl-row">
@@ -629,14 +695,15 @@ export default function ProgressPage() {
                       </td>
                       <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{p.nama_ppl}</td>
                       <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nama_pml}</td>
-                      {petugasKec && <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B' }}>{p.nmkec}</td>}
+                      <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B', whiteSpace: 'nowrap' }}>{p.nmkec}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D' }}>{p.total.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#1877F2', fontWeight: 700 }} title={isWeekMode ? 'Draft per-minggu tidak tersedia' : 'Sudah dicacah belum disubmit (tidak dihitung selesai)'}>{p.draft == null ? '—' : (p.draft).toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#C85E0A' }} title="Sudah dicacah (submitted + rejected + approved + revoked)">{p.selesai_cacah.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D', fontWeight: 700 }} title="Sudah submit pencacah, menunggu approve">{p.submitted == null ? '—' : (p.submitted).toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#E8192C', fontWeight: 700 }} title="Ditolak pengawas — sudah dicacah, masuk hitungan selesai cacah">{p.rejected == null ? '—' : (p.rejected).toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', fontSize: 13, color: '#9333EA', fontWeight: 700 }} title="Revoked pengawas — sudah dicacah, masuk hitungan selesai cacah">{p.revoked == null ? '—' : (p.revoked).toLocaleString('id-ID')}</td>
-                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#00A651', fontWeight: 700 }}>{p.selesai_approve.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#0EA5A4', fontWeight: 700 }} title="Diedit pengawas — sudah dicacah, masuk hitungan selesai cacah">{p.edited_pengawas == null ? '—' : (p.edited_pengawas).toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#00A651', fontWeight: 700 }} title="Approved + finalisasi admin kabupaten">{p.selesai_approve.toLocaleString('id-ID')}</td>
                       <td style={{ padding: '10px 14px', minWidth: 130 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <div style={{ flex: 1, height: 6, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden', minWidth: 50 }}>
@@ -651,6 +718,80 @@ export default function ProgressPage() {
                           style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #EDE3D8', background: 'white', color: '#C85E0A', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
                           title="Lihat grafik progress harian petugas ini"
                         >📈 Harian</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Tabel Monitoring Pengawas (PML) ── */}
+          <div style={{ background: 'white', borderRadius: 14, border: '1px solid #EDE3D8', overflow: 'hidden', boxShadow: '0 2px 16px rgba(232,117,26,.07)', marginTop: 32 }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>Monitoring Progress Pengawas (PML)</h3>
+                <p style={{ fontSize: 12, color: '#8C7B6B', margin: '4px 0 0', maxWidth: 640 }}>
+                  Aktivitas review tiap pengawas atas unit PPL-nya: <span style={{ color: '#3D3D3D' }}>Submitted</span> (dari PPL), <span style={{ color: '#00A651' }}>Approved &amp; Final</span>, <span style={{ color: '#E8192C' }}>Rejected</span>, <span style={{ color: '#0EA5A4' }}>Edited</span> — diperbarui realtime.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <select value={pengawasKec} onChange={e => setPengawasKec(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 12, fontWeight: 700, color: '#3D3D3D', outline: 'none', background: 'white' }}>
+                  <option value="">🗺️ Semua Kecamatan</option>
+                  {pengawasKecList.map((k: any) => <option key={k.kode_kec} value={k.kode_kec}>{k.nmkec}</option>)}
+                </select>
+                <input value={pengawasQ} onChange={e => setPengawasQ(e.target.value)} placeholder="Cari nama PML…" style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #EDE3D8', fontSize: 13, outline: 'none', width: 140 }} />
+                <button onClick={exportPengawasCsv} disabled={!filteredPengawas.length} style={exBtn}>⬇ CSV</button>
+                <button onClick={exportPengawasPng} disabled={!filteredPengawas.length} style={exBtn}>🖼️ PNG</button>
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto', maxHeight: 520, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#FDF6EE', position: 'sticky', top: 0 }}>
+                    {[
+                      { label: '#', key: null },
+                      { label: 'Pengawas (PML)', key: 'nama_pml' },
+                      { label: 'Kecamatan', key: 'nmkec' },
+                      { label: 'Jumlah PPL', key: 'jumlah_ppl' },
+                      { label: 'Total Assignment', key: 'jumlah_unit' },
+                      { label: 'Submitted', key: 'submitted' },
+                      { label: 'Approved & Final', key: 'approved' },
+                      { label: 'Rejected', key: 'rejected' },
+                      { label: 'Revoked', key: 'revoked' },
+                      { label: 'Edited Pengawas', key: 'edited_pengawas' },
+                      { label: 'Progress', key: 'pct_cacah' },
+                    ].map(c => (
+                      <th key={c.label} onClick={() => c.key && pgwClickSort(c.key)}
+                        style={{ padding: '12px 14px', textAlign: 'left' as const, fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase' as const, letterSpacing: .5, borderBottom: '1px solid #EDE3D8', whiteSpace: 'nowrap' as const, cursor: c.key ? 'pointer' : 'default', background: '#FDF6EE' }}>
+                        {c.label} {c.key && pgwSort.key === c.key ? (pgwSort.dir === 'desc' ? '↓' : '↑') : ''}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPengawas.length === 0 && (
+                    <tr><td colSpan={11} style={{ padding: 24, textAlign: 'center', color: '#8C7B6B', fontSize: 13 }}>Belum ada data pengawas dari Fasih. Akan muncul setelah bot scraper mengirim update.</td></tr>
+                  )}
+                  {filteredPengawas.map((p: any, i: number) => (
+                    <tr key={(p.nama_pml ?? '') + p.nmkec + i} style={{ background: i % 2 ? '#FAFAFA' : 'white' }} className="tbl-row">
+                      <td style={{ padding: '10px 14px', fontSize: 12, color: '#8C7B6B' }}>{i + 1}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{p.nama_pml}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 12, color: '#6B6B6B', whiteSpace: 'nowrap' }}>{p.nmkec}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D' }}>{p.jumlah_ppl.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D' }}>{p.jumlah_unit.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#3D3D3D', fontWeight: 700 }} title="Unit yang sudah disubmit PPL (menunggu approve)">{p.submitted.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#00A651', fontWeight: 700 }} title="Approved + finalisasi admin kabupaten">{p.approved.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#E8192C', fontWeight: 700 }}>{p.rejected.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#9333EA', fontWeight: 700 }}>{p.revoked.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 13, color: '#0EA5A4', fontWeight: 700 }} title="Unit yang diedit pengawas">{p.edited_pengawas.toLocaleString('id-ID')}</td>
+                      <td style={{ padding: '10px 14px', minWidth: 130 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, background: '#FFF0DC', borderRadius: 99, overflow: 'hidden', minWidth: 50 }}>
+                            <div style={{ height: '100%', background: 'linear-gradient(90deg,#E8751A,#F5A623)', width: `${Math.min(p.pct_cacah, 100)}%`, borderRadius: 99 }} />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#E8751A', minWidth: 38 }}>{p.pct_cacah.toFixed(1)}%</span>
+                        </div>
                       </td>
                     </tr>
                   ))}

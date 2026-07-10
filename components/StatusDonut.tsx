@@ -10,30 +10,32 @@ import { useEffect, useState } from 'react'
  */
 type Props = {
   open: number; draft: number; submitted: number; approved: number
-  rejected: number; revoked: number; total: number; cacah: number
+  rejected: number; revoked: number; editedPengawas: number; total: number; cacah: number
 }
 
 const DESC: Record<string, string> = {
-  approved: 'Disetujui pengawas',
+  approved: 'Approved + finalisasi admin kabupaten',
   submitted: 'Submit, menunggu approve',
   draft: 'Draft — belum disubmit',
   rejected: 'Ditolak pengawas',
   revoked: 'Dicabut (approve → revoke)',
+  edited_pengawas: 'Diedit pengawas (sudah dicacah)',
   open: 'Belum dikerjakan',
 }
 
-export default function StatusDonut({ open, draft, submitted, approved, rejected, revoked, total, cacah }: Props) {
+export default function StatusDonut({ open, draft, submitted, approved, rejected, revoked, editedPengawas, total, cacah }: Props) {
   const [mounted, setMounted] = useState(false)
   const [active, setActive] = useState<string | null>(null)
   useEffect(() => { const t = setTimeout(() => setMounted(true), 60); return () => clearTimeout(t) }, [])
 
   const segs = [
-    { key: 'approved',  label: 'Approved',  value: approved,  color: '#00A651' },
-    { key: 'submitted', label: 'Submitted', value: submitted, color: '#E8751A' },
-    { key: 'draft',     label: 'Draft',     value: draft,     color: '#1877F2' },
-    { key: 'rejected',  label: 'Rejected',  value: rejected,  color: '#E8192C' },
-    { key: 'revoked',   label: 'Revoked',   value: revoked,   color: '#9333EA' },
-    { key: 'open',      label: 'Open',      value: open,      color: '#E7D8C4' },
+    { key: 'approved',        label: 'Approved & Final', value: approved,       color: '#00A651' },
+    { key: 'submitted',       label: 'Submitted',        value: submitted,      color: '#E8751A' },
+    { key: 'draft',           label: 'Draft',            value: draft,          color: '#1877F2' },
+    { key: 'rejected',        label: 'Rejected',         value: rejected,       color: '#E8192C' },
+    { key: 'revoked',         label: 'Revoked',          value: revoked,        color: '#9333EA' },
+    { key: 'edited_pengawas', label: 'Edited Pengawas',  value: editedPengawas, color: '#0EA5A4' },
+    { key: 'open',            label: 'Open',             value: open,           color: '#E7D8C4' },
   ]
   const sum = segs.reduce((a, s) => a + s.value, 0) || 1
   const pctCacah = total > 0 ? Math.round((cacah / total) * 1000) / 10 : 0
