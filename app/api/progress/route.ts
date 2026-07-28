@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { cachedJson, cacheHeaders } from '@/lib/cache'
 
 /**
  * GET /api/progress
@@ -12,7 +13,9 @@ import pool from '@/lib/db'
  * Field tambahan `fasih` berisi rincian status (open/draft/submitted/approved) + approve.
  */
 export async function GET(_req: NextRequest) {
+  const skalaKey = new URL(_req.url).searchParams.get('skala') ?? ''
   try {
+    const body = await cachedJson(`progress:${skalaKey}`, 30_000, async () => {
     const [fasih] = await pool.execute(
       `SELECT kode_kec, total, open, draft, submitted_pencacah, submitted_responden,
               approved, rejected, revoked, completed_admin, edited_admin, edited_pengawas,
@@ -60,7 +63,7 @@ export async function GET(_req: NextRequest) {
           },
         }
       })
-      return NextResponse.json({ data, source: 'fasih' }, { headers: { 'Cache-Control': 'no-store' } })
+      return { data, source: 'fasih' }
     }
 
     // ---- Fallback: agregasi dari usaha (skala UMK/UM/UB) ----
@@ -95,7 +98,9 @@ export async function GET(_req: NextRequest) {
         },
       }
     })
-    return NextResponse.json({ data, source: 'usaha' }, { headers: { 'Cache-Control': 'no-store' } })
+    return { data, source: 'usaha' }
+    })
+    return NextResponse.json(body, { headers: cacheHeaders(30) })
   } catch (e: any) {
     console.error('[api/progress] error:', e?.message)
     return NextResponse.json({ data: [], error: e?.message ?? 'DB error' })

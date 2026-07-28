@@ -196,7 +196,7 @@ export default function ProgressLiveSection({ progress: initialProgress, stats }
         .finally(() => { if (!cancel) setLoading(false) })
     }
     load(true)
-    const id = setInterval(() => load(false), 60000)
+    const id = setInterval(() => { if (!document.hidden) load(false) }, 60000)
     return () => { cancel = true; clearInterval(id) }
   }, [])
 

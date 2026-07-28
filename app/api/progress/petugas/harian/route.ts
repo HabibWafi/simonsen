@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { cachedJson, cacheHeaders } from '@/lib/cache'
 
 /**
  * GET /api/progress/petugas/harian
@@ -43,7 +44,9 @@ export async function GET(req: NextRequest) {
   const from = (sp.get('from') || '').match(/^\d{4}-\d{2}-\d{2}$/) ? sp.get('from')! : ''
   const to = (sp.get('to') || '').match(/^\d{4}-\d{2}-\d{2}$/) ? sp.get('to')! : ''
 
+  const cacheKey = `harian:${mode}:${kec}:${nama}:${days}:${from}:${to}`
   try {
+    const body = await cachedJson(cacheKey, 30_000, async () => {
     const namaMap = await kecNameMap()
     const where: string[] = []
     const params: any[] = []
@@ -70,7 +73,7 @@ export async function GET(req: NextRequest) {
     }
 
     const base = { kecamatanList, petugasList, mode }
-    if (rows.length === 0) return NextResponse.json({ ...base, dates: [], series: [], aggregate: null }, { headers: { 'Cache-Control': 'no-store' } })
+    if (rows.length === 0) return { ...base, dates: [], series: [], aggregate: null }
 
     // key = pencacah|kec → byDate cum
     const keys = new Map<string, { nama_ppl: string; kode_kec: string; byDate: Map<string, number>; sorted: { d: string; c: number }[] }>()
@@ -111,7 +114,7 @@ export async function GET(req: NextRequest) {
         series = [...byKec.entries()].map(([kk, d]) => { addInto(aggregate, d); return { key: kk, name: namaMap.get(String(kk)) ?? kk, nmkec: namaMap.get(String(kk)) ?? kk, data: d } })
       }
       series.sort((a, b) => b.data.reduce((x: number, y: number) => x + y, 0) - a.data.reduce((x: number, y: number) => x + y, 0))
-      return NextResponse.json({ ...base, dates: labels, series, aggregate: { name: kec ? `Total ${namaMap.get(kec) ?? kec}` : 'Total Kabupaten', data: aggregate } }, { headers: { 'Cache-Control': 'no-store' } })
+      return { ...base, dates: labels, series, aggregate: { name: kec ? `Total ${namaMap.get(kec) ?? kec}` : 'Total Kabupaten', data: aggregate } }
     }
 
     // ---- DAILY ----
@@ -147,13 +150,15 @@ export async function GET(req: NextRequest) {
       series = [...byKec.entries()].map(([kk, d]) => { addInto(aggregate, d); return { key: kk, name: namaMap.get(String(kk)) ?? kk, nmkec: namaMap.get(String(kk)) ?? kk, data: d } })
     }
     series.sort((a, b) => b.data.reduce((x: number, y: number) => x + y, 0) - a.data.reduce((x: number, y: number) => x + y, 0))
-    return NextResponse.json({
+    return {
       ...base,
       dates: displayDates.map(fmtShort),
       datesRaw: displayDates,
       series,
       aggregate: { name: kec ? `Total ${namaMap.get(kec) ?? kec}` : 'Total Kabupaten', data: aggregate },
-    }, { headers: { 'Cache-Control': 'no-store' } })
+    }
+    })
+    return NextResponse.json(body, { headers: cacheHeaders(30) })
   } catch (e: any) {
     return NextResponse.json({ dates: [], series: [], aggregate: null, kecamatanList: [], petugasList: [], error: e?.message }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }

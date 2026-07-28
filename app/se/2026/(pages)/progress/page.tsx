@@ -240,7 +240,7 @@ export default function ProgressPage() {
       fetch('/api/stats', { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) setStats(j) }).catch(() => {})
     }
     load()
-    const id = setInterval(load, 60000)
+    const id = setInterval(() => { if (!document.hidden) load() }, 60000)
     return () => { stop = true; clearInterval(id) }
   }, [])
 
@@ -261,7 +261,7 @@ export default function ProgressPage() {
         }).catch(() => {})
     }
     load()
-    const id = setInterval(load, 60000)
+    const id = setInterval(() => { if (!document.hidden) load() }, 60000)
     return () => { stop = true; clearInterval(id) }
   }, [petugasKec, petugasWeek])
 
@@ -273,7 +273,7 @@ export default function ProgressPage() {
         .then(r => r.json()).then(j => { if (!stop) { setPengawas(j.pengawas ?? []); setPengawasKecList(j.kecamatanList ?? []) } }).catch(() => {})
     }
     load()
-    const id = setInterval(load, 60000)
+    const id = setInterval(() => { if (!document.hidden) load() }, 60000)
     return () => { stop = true; clearInterval(id) }
   }, [pengawasKec])
 

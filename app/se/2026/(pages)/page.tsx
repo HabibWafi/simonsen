@@ -85,7 +85,7 @@ export default function HomePage() {
       }).catch(() => {})
     }
     load()
-    const id = setInterval(load, 60000)   // realtime: sinkron dengan bot scraper Fasih
+    const id = setInterval(() => { if (!document.hidden) load() }, 60000)   // realtime; skip saat tab background
     return () => clearInterval(id)
   }, [])
 

@@ -57,6 +57,7 @@ export default function PetugasHarianSection() {
       .then(r => r.json()).then(j => { if (!stop) { setResp(j); setHidden(new Set()) } })
       .catch(() => {}).finally(() => { if (!stop) setLoading(false) })
     const id = setInterval(() => {
+      if (document.hidden) return   // skip polling saat tab background
       fetch(url, { cache: 'no-store' }).then(r => r.json()).then(j => { if (!stop) setResp(j) }).catch(() => {})
     }, 60000)
     return () => { stop = true; clearInterval(id) }

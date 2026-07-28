@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { weekBuckets, prevEndOf } from '@/lib/weeks'
+import { cachedJson, cacheHeaders } from '@/lib/cache'
 
 /**
  * GET /api/progress/petugas[?kec=<kode_kec>][?week=<YYYY-MM-DD start minggu>]
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
   const weeks = weekBuckets()
 
   try {
+    const body = await cachedJson(`petugas:${kec ?? ''}:${week}`, 30_000, async () => {
     const [namaRows] = await pool.execute(`SELECT DISTINCT kdkec, nmkec FROM desa`) as [any[], any]
     const namaMap = new Map<string, string>()
     for (const r of namaRows) namaMap.set(String(r.kdkec), r.nmkec)
@@ -37,7 +39,7 @@ export async function GET(req: NextRequest) {
     if (week) {
       const idx = weeks.findIndex(w => w.start === week)
       if (idx < 0) {
-        return NextResponse.json({ petugas: [], kecamatanList, weeks, mode: 'week', week: null }, noStore)
+        return { petugas: [], kecamatanList, weeks, mode: 'week', week: null }
       }
       const wk = weeks[idx]
       const prevEnd = prevEndOf(weeks, idx)
@@ -92,7 +94,7 @@ export async function GET(req: NextRequest) {
         pct_cacah: pct(o.cacah, o.total), pct_approve: pct(o.approve, o.total),
       })).sort((a, b) => b.selesai_cacah - a.selesai_cacah)
 
-      return NextResponse.json({ petugas, kecamatanList, weeks, mode: 'week', week: wk }, noStore)
+      return { petugas, kecamatanList, weeks, mode: 'week', week: wk }
     }
 
     // ── MODE SELURUH WAKTU: kondisi cumulative terkini (fasih_subsls) ──
@@ -125,7 +127,9 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({ petugas, kecamatanList, weeks, mode: 'all', week: null }, noStore)
+    return { petugas, kecamatanList, weeks, mode: 'all', week: null }
+    })
+    return NextResponse.json(body, { headers: cacheHeaders(30) })
   } catch (e: any) {
     return NextResponse.json({ petugas: [], kecamatanList: [], weeks, error: e?.message }, { status: 500, ...noStore })
   }

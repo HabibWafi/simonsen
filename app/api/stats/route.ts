@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { hitungHariTersisa } from '@/lib/utils'
+import { cachedJson, cacheHeaders } from '@/lib/cache'
 
 // Stats kosong (BUKAN dummy) — supaya tidak ada angka palsu yang menyesatkan.
 const EMPTY_STATS = {
@@ -12,6 +13,7 @@ const noStore = { headers: { 'Cache-Control': 'no-store' } }
 
 export async function GET() {
   try {
+    const body = await cachedJson('stats', 30_000, async () => {
     // ---- Sumber utama: fasih_kec (realtime) ----
     const [[fk]] = await pool.execute(`
       SELECT SUM(total) AS total_target, SUM(selesai_cacah) AS total_realisasi,
@@ -40,7 +42,7 @@ export async function GET() {
           }).format(new Date(lastUnix * 1000)) + ' WIB'
         : null
       const total_target = Number(fk.total_target), total_realisasi = Number(fk.total_realisasi)
-      return NextResponse.json({
+      return {
         total_target,
         total_realisasi,
         total_approve:   Number(fk.total_approve),
@@ -54,7 +56,7 @@ export async function GET() {
         snapshot_ts:      snap?.snapshot_ts ?? null,
         has_data: true,
         source: 'fasih',
-      }, noStore)
+      }
     }
 
     const [[summary]] = await pool.execute(`
@@ -67,7 +69,7 @@ export async function GET() {
     `) as [any[], any]
 
     if (!summary || Number(summary.total_target) === 0) {
-      return NextResponse.json({ ...EMPTY_STATS, hari_tersisa: hitungHariTersisa() }, noStore)
+      return { ...EMPTY_STATS, hari_tersisa: hitungHariTersisa() }
     }
 
     const [[activeToday]] = await pool.execute(`
@@ -79,7 +81,7 @@ export async function GET() {
     const total_target    = Number(summary.total_target)    ?? 0
     const total_realisasi = Number(summary.total_realisasi) ?? 0
 
-    return NextResponse.json({
+    return {
       total_target,
       total_realisasi,
       persentase:      total_target > 0 ? Math.round((total_realisasi / total_target) * 1000) / 10 : 0,
@@ -89,7 +91,9 @@ export async function GET() {
       hari_tersisa:    hitungHariTersisa(),
       has_data:        true,
       source:          'usaha',
-    }, noStore)
+    }
+    })
+    return NextResponse.json(body, { headers: cacheHeaders(30) })
   } catch {
     return NextResponse.json({ ...EMPTY_STATS, hari_tersisa: hitungHariTersisa() }, noStore)
   }

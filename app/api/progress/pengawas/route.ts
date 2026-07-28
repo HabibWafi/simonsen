@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { cachedJson, cacheHeaders } from '@/lib/cache'
 
 /**
  * GET /api/progress/pengawas[?kec=<kode_kec>]
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest) {
   const pct = (a: number, t: number) => t > 0 ? Math.round((a / t) * 1000) / 10 : 0
 
   try {
+    const body = await cachedJson(`pengawas:${kec ?? ''}`, 30_000, async () => {
     const [namaRows] = await pool.execute(`SELECT DISTINCT kdkec, nmkec FROM desa`) as [any[], any]
     const namaMap = new Map<string, string>()
     for (const r of namaRows) namaMap.set(String(r.kdkec), r.nmkec)
@@ -57,7 +59,9 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({ pengawas, kecamatanList }, noStore)
+    return { pengawas, kecamatanList }
+    })
+    return NextResponse.json(body, { headers: cacheHeaders(30) })
   } catch (e: any) {
     return NextResponse.json({ pengawas: [], kecamatanList: [], error: e?.message }, { status: 500, ...noStore })
   }
