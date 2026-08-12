@@ -246,11 +246,41 @@ export async function ingestFasih(
       [Object.values(counts).reduce((a, b) => a + b, 0), snapshotId])
 
     await conn.commit()
+    // Rapikan tabel log SETELAH commit (di luar transaksi) supaya tidak menahan lock.
+    // Gagal prune tidak boleh menggagalkan ingest.
+    pruneLogs(pool).catch(() => {})
     return { snapshot_id: snapshotId, counts }
   } catch (e) {
     await conn.rollback()
     throw e
   } finally {
     conn.release()
+  }
+}
+
+/**
+ * fasih_snapshot & api_audit_log bertambah 1 baris SETIAP push bot.
+ * Interval 2 menit = ~720 baris/hari/tabel → tumbuh tanpa batas padahal yang
+ * berguna hanya riwayat terakhir. Prune dijalankan berkala (tiap N ingest) dan
+ * dibatasi LIMIT supaya DELETE-nya ringan untuk shared hosting.
+ */
+const KEEP_SNAPSHOT = 500     // ~17 jam riwayat @2 menit
+const KEEP_AUDIT = 2000
+const PRUNE_EVERY = 20        // jalan tiap 20 ingest (~40 menit)
+const DELETE_LIMIT = 1000     // batas per eksekusi; sisa dikejar siklus berikutnya
+let ingestSincePrune = 0
+
+async function pruneLogs(pool: Pool): Promise<void> {
+  if (++ingestSincePrune < PRUNE_EVERY) return
+  ingestSincePrune = 0
+  for (const [table, keep] of [['fasih_snapshot', KEEP_SNAPSHOT], ['api_audit_log', KEEP_AUDIT]] as const) {
+    try {
+      // Ambil id batas: baris ke-`keep` dari terbaru. Yang lebih lama dihapus.
+      const [rows] = await pool.query(
+        `SELECT id FROM ${table} ORDER BY id DESC LIMIT 1 OFFSET ?`, [keep],
+      ) as [any[], any]
+      const cutoff = rows?.[0]?.id
+      if (cutoff) await pool.query(`DELETE FROM ${table} WHERE id < ? LIMIT ${DELETE_LIMIT}`, [cutoff])
+    } catch { /* tabel belum ada / DB sibuk → abaikan, coba lagi nanti */ }
   }
 }
