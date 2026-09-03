@@ -39,7 +39,7 @@ try {
      ON DUPLICATE KEY UPDATE nama = VALUES(nama), role = VALUES(role), password = VALUES(password)`,
     [nip, nama, hashed],
   )
-  console.log(`✓ Admin bootstrapped: nip=${nip} password=${password}`)
+  console.log(`✓ Admin bootstrapped: nip=${nip} (password tidak ditampilkan)`)
   console.log(`  affectedRows=${result.affectedRows}`)
 } catch (e) {
   console.error('✗ Failed:', e.message)

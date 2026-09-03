@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
-import type { Role } from '@/types'
+import type { Role, SessionUser } from '@/types'
 import FooterDashboard from '@/components/layout/FooterDashboard'
 import { ToastProvider } from '@/components/Toast'
 
@@ -25,6 +25,7 @@ const menuItems: MenuItem[] = [
   { href: `${BASE}/progress`,    label: 'Peta Wilayah',     icon: '🗺️', roles: ['admin', 'koordinator', 'petugas'] },
   { href: `${BASE}/usaha`,       label: 'Daftar Usaha',     icon: '🏪', roles: ['admin', 'koordinator', 'petugas'] },
   { href: `${BASE}/petugas`,     label: 'Progress Petugas', icon: '🧑‍🌾', roles: ['admin', 'koordinator'] },
+  { href: `${BASE}/tagging`,     label: 'Data Tagging',     icon: '◎', roles: ['admin'] },
   { href: `${BASE}/import`,      label: 'Import Data',      icon: '⬆️', roles: ['admin', 'koordinator'] },
   { href: `${BASE}/tahapan`,     label: 'Kelola Tahapan',   icon: '📅', roles: ['admin'] },
   { href: `${BASE}/sosialisasi`, label: 'Kelola Sosialisasi', icon: '📰', roles: ['admin', 'koordinator'] },
@@ -44,7 +45,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const pathname = usePathname()
   const { data: session } = useSession()
-  const user = session?.user as any
+  const user = session?.user as SessionUser | undefined
   const role: Role = (user?.role ?? 'petugas') as Role
 
   const visibleItems = menuItems.filter(m => m.roles.includes(role))
@@ -56,7 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ToastProvider>
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#FAF8F5' }}>
       <div style={{ display: 'flex', flex: 1 }}>
-        <aside style={{
+        <aside className="admin-sidebar" style={{
           width: sidebarOpen ? 240 : 60, flexShrink: 0,
           background: 'white', borderRight: '1px solid #EDE3D8',
           transition: 'width .25s ease', overflow: 'hidden',
@@ -64,12 +65,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }}>
           <div style={{ padding: '16px 14px', borderBottom: '1px solid #EDE3D8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             {sidebarOpen && (
-              <div>
+              <div className="admin-sidebar-brand">
                 <div style={{ fontSize: 12, fontWeight: 700, color: SENSUS.primary, textTransform: 'uppercase', letterSpacing: .5 }}>{SENSUS.label}</div>
                 <div style={{ fontSize: 11, color: '#6B6B6B' }}>Panel Admin</div>
               </div>
             )}
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 4, borderRadius: 6, color: '#6B6B6B', flexShrink: 0 }}>
+            <button className="admin-sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 4, borderRadius: 6, color: '#6B6B6B', flexShrink: 0 }}>
               {sidebarOpen ? '◀' : '▶'}
             </button>
           </div>
@@ -87,14 +88,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   fontSize: 13, transition: 'all .15s', whiteSpace: 'nowrap',
                 }} className="sidebar-link">
                   <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-                  {sidebarOpen && item.label}
+                  {sidebarOpen && <span className="admin-sidebar-label">{item.label}</span>}
                 </Link>
               )
             })}
           </nav>
 
           {sidebarOpen && user && (
-            <div style={{ padding: '14px', borderTop: '1px solid #EDE3D8' }}>
+            <div className="admin-sidebar-user" style={{ padding: '14px', borderTop: '1px solid #EDE3D8' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                 <div style={{ width: 36, height: 36, borderRadius: '50%', background: SENSUS.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'white', flexShrink: 0 }}>
                   {(user.name ?? '?').toString().charAt(0).toUpperCase()}
@@ -112,12 +113,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </aside>
 
-        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-          <header style={{ background: 'white', borderBottom: '1px solid #EDE3D8', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="admin-main" style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <header className="admin-header" style={{ background: 'white', borderBottom: '1px solid #EDE3D8', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A', margin: 0 }}>
               {activeItem?.label ?? 'Dashboard'}
             </h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="admin-header-meta" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Link href={`/${SENSUS.kode}/${SENSUS.tahun}`} style={{ fontSize: 12, color: SENSUS.primary, textDecoration: 'none', fontWeight: 600 }}>
                 ↗ Buka Halaman Publik
               </Link>
@@ -127,7 +128,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </header>
 
-          <div style={{ padding: 24, flex: 1 }}>
+          <div className="admin-content" style={{ padding: 24, flex: 1 }}>
             {children}
           </div>
 
@@ -135,7 +136,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </div>
 
-      <style>{`.sidebar-link:hover { background: ${SENSUS.accent} !important; color: ${SENSUS.primary} !important; }`}</style>
+      <style>{`
+        .sidebar-link:hover { background: ${SENSUS.accent} !important; color: ${SENSUS.primary} !important; }
+        .admin-main { min-width: 0; }
+        @media (max-width: 720px) {
+          .admin-sidebar { width: 56px !important; }
+          .admin-sidebar-brand, .admin-sidebar-label, .admin-sidebar-user, .admin-sidebar-toggle { display: none !important; }
+          .admin-sidebar nav { padding-inline: 7px !important; }
+          .admin-sidebar .sidebar-link { justify-content: center; padding-inline: 8px !important; }
+          .admin-header { padding-inline: 12px !important; }
+          .admin-header-meta span { display: none; }
+          .admin-content { padding: 12px !important; }
+        }
+      `}</style>
     </div>
     </ToastProvider>
   )

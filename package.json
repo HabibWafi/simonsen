@@ -6,7 +6,9 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate-tagging": "node scripts/migrate-iterasi23.mjs",
+    "db:import-tagging": "node scripts/import-tagging.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { useToast } from '@/components/Toast'
 
 interface ImportResult {
@@ -29,8 +30,20 @@ interface HistoryRow {
   revoked_at?: string | null
 }
 
+interface FasihImportResult {
+  ok?: boolean
+  snapshot_id?: number | string
+  counts?: Record<string, unknown>
+}
+
+function errorMessage(error: unknown, fallback = 'Network error') {
+  return error instanceof Error ? error.message : fallback
+}
+
 export default function ImportPage() {
-  const [tab, setTab] = useState<'usaha' | 'progress' | 'fasih'>('usaha')
+  const { data: session } = useSession()
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'admin'
+  const [tab, setTab] = useState<'usaha' | 'progress' | 'fasih' | 'tagging'>('usaha')
   const refreshHistoryRef = useRef<() => void>(() => {})
 
   const onSuccess = useCallback(() => {
@@ -50,9 +63,12 @@ export default function ImportPage() {
         <TabButton active={tab === 'usaha'} onClick={() => setTab('usaha')}>📦 Master Usaha</TabButton>
         <TabButton active={tab === 'progress'} onClick={() => setTab('progress')}>📊 Update Progress (per IDSBR)</TabButton>
         <TabButton active={tab === 'fasih'} onClick={() => setTab('fasih')}>🤖 Progress Fasih (Scraper)</TabButton>
+        {isAdmin && <TabButton active={tab === 'tagging'} onClick={() => setTab('tagging')}>◎ Data Tagging</TabButton>}
       </div>
 
-      {tab === 'fasih' ? (
+      {tab === 'tagging' ? (
+        <TaggingImportCard />
+      ) : tab === 'fasih' ? (
         <FasihImportCard />
       ) : tab === 'usaha' ? (
         <ImportCard
@@ -79,9 +95,125 @@ export default function ImportPage() {
         />
       )}
 
-      <HistoryTable refreshRef={refreshHistoryRef} />
+      {tab === 'tagging' ? <TaggingHistory /> : <HistoryTable refreshRef={refreshHistoryRef} />}
     </div>
   )
+}
+
+/* ---------- TaggingImportCard (snapshot penuh, chunked) ---------- */
+
+const TAGGING_COLUMNS = [
+  'assignment_id', 'assignment_status_alias', 'level_6_full_code', 'nama_usaha_bang', 'nama_kk',
+  'ada_keluarga_label', 'ada_bang_usaha_label', 'geotag_accuracy', 'geotag_latitude', 'geotag_longitude',
+]
+
+type TaggingResult = {
+  batchId: number
+  rawRows: number
+  uniqueAssignments: number
+  duplicateRows: number
+  statusConflicts: number
+  exactPointGroups: number
+  nearPointGroups: number
+  missingCoordinates: number
+  lowAccuracy: number
+  unmappedCodes: number
+  outsideSubsls: number
+}
+
+async function postJson(url: string, body: unknown, retries = 0): Promise<Response> {
+  let lastError: unknown
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (response.ok || response.status < 500) return response
+      lastError = new Error(`HTTP ${response.status}`)
+    } catch (error) { lastError = error }
+    if (attempt < retries) await new Promise(resolve => setTimeout(resolve, 700 * (attempt + 1)))
+  }
+  throw lastError instanceof Error ? lastError : new Error('Network error')
+}
+
+function TaggingImportCard() {
+  const toast = useToast()
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [phase, setPhase] = useState('')
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<TaggingResult | null>(null)
+
+  async function submit() {
+    if (!file) return
+    setBusy(true); setProgress(1); setError(''); setResult(null); setPhase('Membaca workbook di browser…')
+    try {
+      if (!/\.xlsx$/i.test(file.name)) throw new Error('Gunakan file .xlsx')
+      if (file.size > 50 * 1024 * 1024) throw new Error('Ukuran file maksimum 50 MB')
+      const buffer = await file.arrayBuffer()
+      const digest = await crypto.subtle.digest('SHA-256', buffer)
+      const fileSha256 = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('')
+      const XLSX = await import('xlsx')
+      const workbook = XLSX.read(buffer, { type: 'array' })
+      const worksheet = workbook.Sheets.Sheet2
+      if (!worksheet) throw new Error('Sheet2 tidak ditemukan')
+      // raw:true wajib agar kode wilayah 16 digit tidak berubah menjadi notasi ilmiah tampilan Excel.
+      const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: null, raw: true })
+      if (!parsed.length) throw new Error('Sheet2 tidak memiliki data')
+      const missing = TAGGING_COLUMNS.filter(column => !Object.keys(parsed[0]).includes(column))
+      if (missing.length) throw new Error(`Kolom wajib tidak ditemukan: ${missing.join(', ')}`)
+      setProgress(7); setPhase(`Mempersiapkan ${parsed.length.toLocaleString('id-ID')} baris…`)
+
+      const startRes = await postJson('/api/admin/tagging/import/start', {
+        filename: file.name, fileSha256, fileSize: file.size, rawRows: parsed.length,
+      })
+      const startJson = await startRes.json()
+      if (!startRes.ok) throw new Error(startJson.error ?? 'Gagal membuat batch tagging')
+      const batchId = Number(startJson.batchId)
+      const chunkSize = 1000
+      for (let start = 0; start < parsed.length; start += chunkSize) {
+        const rows = parsed.slice(start, start + chunkSize).map((row, index) => ({ ...row, source_row: start + index + 2 }))
+        setPhase(`Mengirim baris ${(start + 1).toLocaleString('id-ID')}–${Math.min(start + chunkSize, parsed.length).toLocaleString('id-ID')}…`)
+        const chunkRes = await postJson(`/api/admin/tagging/import/${batchId}/chunk`, { rows }, 3)
+        const chunkJson = await chunkRes.json()
+        if (!chunkRes.ok) throw new Error(chunkJson.error ?? `Chunk mulai baris ${start + 2} gagal`)
+        setProgress(8 + Math.round((Math.min(start + chunkSize, parsed.length) / parsed.length) * 77))
+      }
+
+      setPhase('Mendeteksi duplikasi, jarak 10 meter, dan kecocokan poligon…'); setProgress(88)
+      const completeRes = await postJson(`/api/admin/tagging/import/${batchId}/complete`, {}, 0)
+      const completeJson = await completeRes.json()
+      if (!completeRes.ok) throw new Error(completeJson.error ?? 'Finalisasi snapshot gagal')
+      setResult(completeJson); setProgress(100); setPhase('Snapshot aktif')
+      toast.success(`Snapshot tagging #${batchId} aktif`, `${completeJson.uniqueAssignments.toLocaleString('id-ID')} assignment unik`)
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Import tagging gagal'
+      setError(message); setPhase('Import terhenti'); toast.error('Import tagging gagal', message)
+    } finally { setBusy(false) }
+  }
+
+  return <div style={{ background: '#17212B', color: 'white', borderRadius: 16, padding: 24, marginBottom: 20, boxShadow: '0 16px 44px rgba(23,33,43,.14)' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div style={{ maxWidth: 720 }}><div style={{ fontSize: 10, color: '#FFB36E', fontWeight: 900, letterSpacing: '.15em', marginBottom: 7 }}>SNAPSHOT TAGGING · ADMIN ONLY</div><h2 style={{ margin: 0, fontSize: 19 }}>Impor data tagging lapangan</h2><p style={{ color: 'rgba(255,255,255,.66)', fontSize: 12, lineHeight: 1.65 }}>Workbook diproses bertahap per 1.000 baris. Snapshot lama tetap aktif sampai validasi kode wilayah, duplikasi assignment, titik identik, dan jarak 10 meter selesai.</p></div>
+      <a href="/se/2026/dashboard/tagging" style={{ color: '#FFB36E', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>Buka dashboard tagging ↗</a>
+    </div>
+    <div style={{ marginTop: 16, padding: 18, border: '1px dashed rgba(255,255,255,.23)', borderRadius: 12, background: 'rgba(255,255,255,.05)' }}>
+      <input type="file" accept=".xlsx" disabled={busy} onChange={event => setFile(event.target.files?.[0] ?? null)} style={{ width: '100%', color: 'white', fontSize: 12 }} />
+      {file && <div style={{ marginTop: 9, color: '#D7E1E8', fontSize: 11 }}>{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</div>}
+    </div>
+    {(busy || progress > 0) && <div style={{ marginTop: 14 }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'rgba(255,255,255,.68)', marginBottom: 6 }}><span>{phase}</span><strong>{progress}%</strong></div><div style={{ height: 7, borderRadius: 99, overflow: 'hidden', background: 'rgba(255,255,255,.12)' }}><div style={{ width: `${progress}%`, height: '100%', background: error ? '#FB7185' : '#E8751A', transition: 'width .25s' }} /></div></div>}
+    {error && <div style={{ marginTop: 14, border: '1px solid rgba(251,113,133,.45)', background: 'rgba(190,18,60,.22)', color: '#FFE4E6', borderRadius: 9, padding: 11, fontSize: 12 }}>{error}</div>}
+    {result && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(125px,1fr))', gap: 8, marginTop: 15 }}>{[
+      ['Assignment', result.uniqueAssignments], ['Duplikat', result.duplicateRows], ['Konflik status', result.statusConflicts],
+      ['Titik identik', result.exactPointGroups], ['Cluster ≤10 m', result.nearPointGroups], ['Di luar Sub-SLS', result.outsideSubsls],
+    ].map(([label, value]) => <div key={String(label)} style={{ padding: 11, borderRadius: 9, background: 'rgba(255,255,255,.07)' }}><span style={{ display: 'block', color: 'rgba(255,255,255,.55)', fontSize: 9, textTransform: 'uppercase' }}>{label}</span><strong style={{ display: 'block', color: '#FFB36E', fontSize: 19, marginTop: 4 }}>{Number(value).toLocaleString('id-ID')}</strong></div>)}</div>}
+    <button disabled={!file || busy} onClick={submit} style={{ width: '100%', marginTop: 15, height: 43, border: 0, borderRadius: 9, background: !file || busy ? '#53606B' : '#E8751A', color: 'white', fontWeight: 850, cursor: !file || busy ? 'not-allowed' : 'pointer' }}>{busy ? 'Memproses snapshot…' : 'Validasi & impor snapshot penuh'}</button>
+  </div>
+}
+
+function TaggingHistory() {
+  const [rows, setRows] = useState<Array<Record<string, unknown>>>([])
+  useEffect(() => { void fetch('/api/admin/tagging/history').then(res => res.json()).then(json => setRows(json.data ?? [])) }, [])
+  return <div style={{ background: 'white', border: '1px solid #EDE3D8', borderRadius: 12, overflow: 'hidden' }}><div style={{ padding: '16px 18px', borderBottom: '1px solid #EDE3D8' }}><h3 style={{ margin: 0, fontSize: 14 }}>Riwayat snapshot tagging</h3></div><div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}><thead><tr>{['ID','File','Status','Baris','Assignment','Duplikat','Titik identik','Tanggal'].map(label => <th key={label} style={th}>{label}</th>)}</tr></thead><tbody>{rows.map(row => <tr key={String(row.id)}><td style={td}>#{String(row.id)}{Boolean(row.is_active) && <strong style={{ display: 'block', color: '#00A651', fontSize: 9 }}>AKTIF</strong>}</td><td style={td}>{String(row.filename)}</td><td style={td}>{String(row.status)}</td><td style={td}>{Number(row.raw_rows).toLocaleString('id-ID')}</td><td style={td}>{Number(row.unique_assignments).toLocaleString('id-ID')}</td><td style={td}>{Number(row.duplicate_rows).toLocaleString('id-ID')}</td><td style={td}>{Number(row.exact_point_groups).toLocaleString('id-ID')}</td><td style={td}>{new Date(String(row.created_at)).toLocaleString('id-ID')}</td></tr>)}</tbody></table></div></div>
 }
 
 /* ---------- FasihImportCard (upload xlsx scraper langsung) ---------- */
@@ -89,7 +221,7 @@ export default function ImportPage() {
 function FasihImportCard() {
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<FasihImportResult | null>(null)
   const [error, setError] = useState('')
 
   async function submit() {
@@ -102,7 +234,7 @@ function FasihImportCard() {
       const j = await res.json()
       if (!res.ok) throw new Error(j.error ?? 'Import gagal')
       setResult(j)
-    } catch (e: any) { setError(e.message) }
+    } catch (requestError) { setError(errorMessage(requestError)) }
     finally { setBusy(false) }
   }
 
@@ -175,7 +307,12 @@ function ImportCard({
       if (!res.ok) {
         const msg = j.error ?? 'Gagal upload'
         setError(msg)
-        if (j.missingColumns) setResult({ ...j, missingColumns: j.missingColumns } as any)
+        if (j.missingColumns) setResult({
+          total: Number(j.total ?? 0), inserted: Number(j.inserted ?? 0), updated: Number(j.updated ?? 0),
+          duplicate: Number(j.duplicate ?? 0), error: Number(j.errorCount ?? 0),
+          errors: Array.isArray(j.errors) ? j.errors : [], batchId: Number(j.batchId ?? 0),
+          missingColumns: j.missingColumns,
+        })
         toast.error('Import gagal', j.missingColumns ? `Kolom wajib hilang: ${j.missingColumns.join(', ')}` : msg)
         return
       }
@@ -183,8 +320,8 @@ function ImportCard({
       const summary = `${j.inserted ?? 0} insert · ${j.updated ?? 0} update · ${j.duplicate ?? 0} duplikat · ${j.error ?? 0} error`
       toast.success(`Import selesai — batch #${j.batchId}`, summary)
       onSuccess()
-    } catch (e: any) {
-      const msg = e.message ?? 'Network error'
+    } catch (requestError) {
+      const msg = errorMessage(requestError)
       setError(msg)
       toast.error('Network error', msg)
     } finally { setBusy(false) }
@@ -202,8 +339,8 @@ function ImportCard({
       a.click()
       URL.revokeObjectURL(url)
       toast.info('Template di-download', templateFilename)
-    } catch (e: any) {
-      toast.error('Gagal download template', e.message)
+    } catch (requestError) {
+      toast.error('Gagal download template', errorMessage(requestError, 'Template tidak dapat diunduh'))
     }
   }
 
@@ -299,7 +436,7 @@ function ImportCard({
               </summary>
               <div style={{ marginTop: 8, maxHeight: 240, overflow: 'auto' }}>
                 {result.errors.map((e, i) => {
-                  const rowNum = (e as any).rowIndex ?? (e as any).row
+                  const rowNum = e.rowIndex ?? e.row
                   return (
                     <div key={i} style={{ padding: '4px 0', borderBottom: '1px solid #FECDD3' }}>
                       Row {rowNum ?? '?'}{e.idsbr ? ` (IDSBR: ${e.idsbr})` : ''}: {e.message}
@@ -357,7 +494,10 @@ function HistoryTable({ refreshRef }: { refreshRef: React.MutableRefObject<() =>
     } finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { fetchHistory() }, [fetchHistory])
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchHistory() }, 0)
+    return () => window.clearTimeout(timer)
+  }, [fetchHistory])
 
   // Expose refresh ke parent
   useEffect(() => { refreshRef.current = fetchHistory }, [refreshRef, fetchHistory])
@@ -374,8 +514,8 @@ function HistoryTable({ refreshRef }: { refreshRef: React.MutableRefObject<() =>
       toast.success(`Batch #${batchId} di-revoke`, `${j.reverted ?? 0} row dikembalikan, ${j.skipped ?? 0} di-skip.`)
       setConfirmId(null)
       await fetchHistory()
-    } catch (e: any) {
-      toast.error('Network error', e.message)
+    } catch (requestError) {
+      toast.error('Network error', errorMessage(requestError))
     } finally { setRevoking(false) }
   }
 
