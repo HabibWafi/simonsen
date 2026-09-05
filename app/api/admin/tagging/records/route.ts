@@ -28,6 +28,6 @@ export async function GET(req: NextRequest) {
   const rows = rowsResult[0] as Array<Record<string, unknown>>
   const counts = countResult[0] as Array<{ total: number }>
   return NextResponse.json({ data: rows, total: Number(counts[0]?.total ?? 0), page, pages: Math.ceil(Number(counts[0]?.total ?? 0) / limit) }, {
-    headers: { 'Cache-Control': 'private, no-store' },
+    headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=60' },
   })
 }

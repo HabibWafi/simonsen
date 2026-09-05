@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { useEffect, useMemo, useRef } from 'react'
+import { GeoJSON, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import type { Feature } from 'geojson'
 import type { Layer } from 'leaflet'
-import type { TaggingMapResponse } from '@/types/tagging'
+import type { TaggingCluster, TaggingMapResponse, TaggingMapViewport, TaggingPoint } from '@/types/tagging'
 import 'leaflet/dist/leaflet.css'
 
 type Props = {
   data: TaggingMapResponse
+  dataVersion: string
   metric: 'total' | 'warnings' | 'approved'
   onZoom: (zoom: number) => void
   onSelectAssignment: (id: string) => void
@@ -21,13 +22,19 @@ function MapEvents({ onZoom }: { onZoom: (zoom: number) => void }) {
   return null
 }
 
-function FitPolygons({ data }: { data: GeoJSON.FeatureCollection | null }) {
+function FitViewport({ viewport }: { viewport?: TaggingMapViewport }) {
   const map = useMap()
+  const fittedKey = useRef('')
   useEffect(() => {
-    if (!data?.features.length) return
-    const bounds = L.geoJSON(data).getBounds()
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [18, 18], maxZoom: 14 })
-  }, [data, map])
+    if (!viewport) {
+      fittedKey.current = ''
+      return
+    }
+    if (fittedKey.current === viewport.key) return
+    fittedKey.current = viewport.key
+    map.stop()
+    map.fitBounds(viewport.bounds, { padding: [22, 22], maxZoom: 17, animate: false })
+  }, [map, viewport])
   return null
 }
 
@@ -39,8 +46,73 @@ function polygonColor(value: number, max: number, metric: Props['metric']) {
   return ratio > .65 ? '#9A3412' : ratio > .35 ? '#EA580C' : ratio > .12 ? '#FB923C' : '#FED7AA'
 }
 
-export default function TaggingMap({ data, metric, onZoom, onSelectAssignment, onSelectSubSls }: Props) {
+function tooltipContent(lines: Array<{ text: string; strong?: boolean; color?: string }>) {
+  const root = document.createElement('div')
+  root.style.minWidth = '150px'
+  root.style.fontFamily = 'ui-sans-serif, sans-serif'
+  for (const line of lines) {
+    const row = document.createElement('div')
+    row.textContent = line.text
+    if (line.strong) row.style.fontWeight = '700'
+    if (line.color) row.style.color = line.color
+    root.appendChild(row)
+  }
+  return root
+}
+
+function ClusterLayer({ data }: { data: TaggingCluster[] }) {
+  const map = useMap()
+  useEffect(() => {
+    const group = L.layerGroup().addTo(map)
+    for (const cluster of data) {
+      const total = Number(cluster.total)
+      const warnings = Number(cluster.warnings)
+      const warningRate = total ? warnings / total : 0
+      const color = Number(cluster.exact_duplicates) > 0 ? '#111827' : warningRate > .5 ? '#BE123C' : '#E8751A'
+      L.circleMarker([Number(cluster.latitude), Number(cluster.longitude)], {
+        radius: Math.min(26, 6 + Math.log2(total + 1) * 2.6),
+        color: '#fff', weight: 2, fillColor: color, fillOpacity: .88,
+      })
+        .bindTooltip(tooltipContent([
+          { text: `${total.toLocaleString('id-ID')} assignment`, strong: true },
+          { text: `${warnings.toLocaleString('id-ID')} memiliki warning`, color: warnings ? '#BE123C' : undefined },
+        ]))
+        .addTo(group)
+    }
+    return () => { group.remove() }
+  }, [data, map])
+  return null
+}
+
+function PointLayer({ data, onSelectAssignment }: { data: TaggingPoint[]; onSelectAssignment: (id: string) => void }) {
+  const map = useMap()
+  useEffect(() => {
+    const group = L.layerGroup().addTo(map)
+    for (const point of data) {
+      const duplicate = Number(point.exact_cluster_size) > 1
+      const warning = Number(point.warning_count) > 0
+      const color = duplicate ? '#111827' : warning ? '#BE123C' : /APPROVED|COMPLETED/.test(point.status_alias) ? '#047857' : '#E8751A'
+      L.circleMarker([Number(point.latitude), Number(point.longitude)], {
+        radius: duplicate ? 8 : 5,
+        color: duplicate ? '#FBBF24' : '#fff', weight: duplicate ? 3 : 1.5, fillColor: color, fillOpacity: .9,
+      })
+        .bindTooltip(tooltipContent([
+          { text: `${point.assignment_id.slice(0, 8)}…`, strong: true },
+          { text: point.status_alias },
+          { text: `${point.nmdesa ?? 'Tidak terpetakan'} · ${point.nmsls ?? 'SLS —'}` },
+          ...(warning ? [{ text: `${point.warning_count} warning`, strong: true, color: '#BE123C' }] : []),
+        ]))
+        .on('click', () => onSelectAssignment(point.assignment_id))
+        .addTo(group)
+    }
+    return () => { group.remove() }
+  }, [data, map, onSelectAssignment])
+  return null
+}
+
+export default function TaggingMap({ data, dataVersion, metric, onZoom, onSelectAssignment, onSelectSubSls }: Props) {
   const polygons = data.mode === 'polygons' ? data.geojson : null
+  const contextPolygons = data.mode !== 'polygons' ? data.contextGeojson : null
   const maxMetric = useMemo(() => {
     if (!polygons) return 1
     return Math.max(1, ...polygons.features.map(feature => Number(feature.properties?.[metric] ?? 0)))
@@ -56,25 +128,31 @@ export default function TaggingMap({ data, metric, onZoom, onSelectAssignment, o
     const total = Number(p.total ?? 0)
     const warning = Number(p.warnings ?? 0)
     const rate = total ? warning / total * 100 : 0
-    layer.bindTooltip(`<div style="min-width:190px;font-family:ui-sans-serif,sans-serif"><b>${String(p.nmdesa ?? '')} · ${String(p.nmsls ?? '')}</b><br/><span style="font-size:11px;color:#64748b">Sub-SLS ${String(p.kdsubsls ?? '')}</span><hr style="border:0;border-top:1px solid #e2e8f0"/><b>${total.toLocaleString('id-ID')}</b> assignment · <b style="color:#be123c">${warning.toLocaleString('id-ID')}</b> warning<br/><span style="font-size:11px">Rasio warning ${rate.toFixed(1)}%</span></div>`, { sticky: true })
+    layer.bindTooltip(tooltipContent([
+      { text: `${String(p.nmdesa ?? '')} · ${String(p.nmsls ?? '')}`, strong: true },
+      { text: `Sub-SLS ${String(p.kdsubsls ?? '')}` },
+      { text: `${total.toLocaleString('id-ID')} assignment · ${warning.toLocaleString('id-ID')} warning` },
+      { text: `Rasio warning ${rate.toFixed(1)}%`, color: warning ? '#BE123C' : undefined },
+    ]), { sticky: true })
+    layer.on({ click: () => onSelectSubSls(String(p.idsubsls ?? '')) })
+  }
+
+  const onEachContextFeature = (feature: Feature, layer: Layer) => {
+    const p = feature.properties ?? {}
+    layer.bindTooltip(tooltipContent([
+      { text: `${String(p.nmdesa ?? '')} · ${String(p.nmsls ?? '')}`, strong: true },
+      { text: `Sub-SLS ${String(p.kdsubsls ?? '')}` },
+    ]), { sticky: true })
     layer.on({ click: () => onSelectSubSls(String(p.idsubsls ?? '')) })
   }
 
   return <MapContainer center={[-3.12, 103.08]} zoom={11} preferCanvas style={{ height: '100%', width: '100%', background: '#E8E1D5' }}>
     <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
     <MapEvents onZoom={onZoom} />
-    <FitPolygons data={polygons} />
-    {polygons && <GeoJSON key={`${metric}-${polygons.features.length}`} data={polygons} style={style} onEachFeature={onEachFeature} />}
-    {data.mode === 'clusters' && data.data.map((cluster, index) => {
-      const warningRate = Number(cluster.total) ? Number(cluster.warnings) / Number(cluster.total) : 0
-      const color = Number(cluster.exact_duplicates) > 0 ? '#111827' : warningRate > .5 ? '#BE123C' : '#E8751A'
-      return <CircleMarker key={`${cluster.latitude}-${cluster.longitude}-${index}`} center={[Number(cluster.latitude), Number(cluster.longitude)]} radius={Math.min(26, 6 + Math.log2(Number(cluster.total) + 1) * 2.6)} pathOptions={{ color: '#fff', weight: 2, fillColor: color, fillOpacity: .88 }}><Tooltip><b>{Number(cluster.total).toLocaleString('id-ID')} assignment</b><br/>{Number(cluster.warnings).toLocaleString('id-ID')} memiliki warning</Tooltip></CircleMarker>
-    })}
-    {data.mode === 'points' && data.data.map(point => {
-      const duplicate = Number(point.exact_cluster_size) > 1
-      const warning = Number(point.warning_count) > 0
-      const color = duplicate ? '#111827' : warning ? '#BE123C' : /APPROVED|COMPLETED/.test(point.status_alias) ? '#047857' : '#E8751A'
-      return <CircleMarker key={point.assignment_id} center={[Number(point.latitude), Number(point.longitude)]} radius={duplicate ? 8 : 5} pathOptions={{ color: duplicate ? '#FBBF24' : '#fff', weight: duplicate ? 3 : 1.5, fillColor: color, fillOpacity: .9 }} eventHandlers={{ click: () => onSelectAssignment(point.assignment_id) }}><Tooltip><b>{point.assignment_id.slice(0, 8)}…</b><br/>{point.status_alias}<br/>{point.nmdesa ?? 'Tidak terpetakan'} · {point.nmsls ?? 'SLS —'}{warning && <><br/><b style={{ color: '#BE123C' }}>{point.warning_count} warning</b></>}</Tooltip></CircleMarker>
-    })}
+    <FitViewport viewport={data.viewport} />
+    {polygons && <GeoJSON key={`metric-${dataVersion}`} data={polygons} style={style} onEachFeature={onEachFeature} />}
+    {contextPolygons && <GeoJSON key={`context-${dataVersion}`} data={contextPolygons} style={{ color: '#E8751A', weight: 1.4, opacity: .9, fillColor: '#FDBA74', fillOpacity: .06 }} onEachFeature={onEachContextFeature} />}
+    {data.mode === 'clusters' && <ClusterLayer data={data.data} />}
+    {data.mode === 'points' && <PointLayer data={data.data} onSelectAssignment={onSelectAssignment} />}
   </MapContainer>
 }

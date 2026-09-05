@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { TaggingFilterState, TaggingMapResponse, TaggingOption } from '@/types/tagging'
 import styles from './tagging.module.css'
@@ -76,65 +76,109 @@ export default function TaggingDashboardClient() {
   const [pages, setPages] = useState(0)
   const [zoom, setZoom] = useState(11)
   const [metric, setMetric] = useState<'total' | 'warnings' | 'approved'>('total')
-  const [loading, setLoading] = useState(true)
+  const [summaryLoading, setSummaryLoading] = useState(true)
+  const [mapLoading, setMapLoading] = useState(true)
   const [error, setError] = useState('')
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null)
   const [detailWarnings, setDetailWarnings] = useState<Array<Record<string, unknown>>>([])
 
   const query = useMemo(() => buildQuery(filters), [filters])
+  const mapQuery = useMemo(() => buildQuery(filters, { zoom }), [filters, zoom])
+  const recordsQuery = useMemo(() => buildQuery(filters, { page, limit: 25 }), [filters, page])
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
     const q = new URLSearchParams()
     if (filters.kdkec) q.set('kdkec', filters.kdkec)
     if (filters.kddesa) q.set('kddesa', filters.kddesa)
     if (filters.idsls) q.set('idsls', filters.idsls)
-    void fetch(`/api/admin/tagging/options?${q}`)
+    void fetch(`/api/admin/tagging/options?${q}`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error('Gagal memuat hierarki wilayah')
         return response.json()
       })
-      .then(payload => { if (!cancelled) setOptions(payload) })
+      .then(payload => setOptions(payload))
       .catch(requestError => {
-        if (!cancelled) setError(requestError instanceof Error ? requestError.message : 'Gagal memuat hierarki wilayah')
+        if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        setError(requestError instanceof Error ? requestError.message : 'Gagal memuat hierarki wilayah')
       })
-    return () => { cancelled = true }
+    return () => controller.abort()
   }, [filters.kdkec, filters.kddesa, filters.idsls])
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
     const timer = setTimeout(async () => {
-      setLoading(true); setError('')
+      setSummaryLoading(true); setError('')
       try {
-        const [summaryRes, mapRes, recordsRes] = await Promise.all([
-          fetch(`/api/admin/tagging/summary?${query}`),
-          fetch(`/api/admin/tagging/map?${buildQuery(filters, { zoom })}`),
-          fetch(`/api/admin/tagging/records?${buildQuery(filters, { page, limit: 25 })}`),
-        ])
-        if (!summaryRes.ok || !mapRes.ok || !recordsRes.ok) throw new Error('Data tagging belum dapat dimuat')
-        const [summaryJson, mapJson, recordsJson] = await Promise.all([summaryRes.json(), mapRes.json(), recordsRes.json()])
-        if (cancelled) return
-        setSummary(summaryJson); setMapData(mapJson); setRecords(recordsJson.data ?? [])
-        setTotalRecords(recordsJson.total ?? 0); setPages(recordsJson.pages ?? 0)
+        const response = await fetch(`/api/admin/tagging/summary?${query}`, { signal: controller.signal })
+        if (!response.ok) throw new Error('Ringkasan tagging belum dapat dimuat')
+        setSummary(await response.json())
       } catch (requestError) {
-        if (!cancelled) setError(requestError instanceof Error ? requestError.message : 'Gagal memuat data')
-      } finally { if (!cancelled) setLoading(false) }
-    }, filters.search ? 350 : 60)
-    return () => { cancelled = true; clearTimeout(timer) }
-  }, [query, filters, zoom, page])
+        if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        setError(requestError instanceof Error ? requestError.message : 'Gagal memuat ringkasan')
+      } finally {
+        if (!controller.signal.aborted) setSummaryLoading(false)
+      }
+    }, filters.search ? 350 : 100)
+    return () => { controller.abort(); clearTimeout(timer) }
+  }, [query, filters.search])
 
-  function patchFilter(patch: Partial<TaggingFilterState>) {
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/admin/tagging/records?${recordsQuery}`, { signal: controller.signal })
+        if (!response.ok) throw new Error('Daftar audit belum dapat dimuat')
+        const payload = await response.json()
+        setRecords(payload.data ?? [])
+        setTotalRecords(payload.total ?? 0)
+        setPages(payload.pages ?? 0)
+      } catch (requestError) {
+        if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        setError(requestError instanceof Error ? requestError.message : 'Gagal memuat daftar audit')
+      }
+    }, filters.search ? 350 : 120)
+    return () => { controller.abort(); clearTimeout(timer) }
+  }, [recordsQuery, filters.search])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      setMapLoading(true)
+      try {
+        const response = await fetch(`/api/admin/tagging/map?${mapQuery}`, { signal: controller.signal })
+        if (!response.ok) throw new Error('Lapisan peta belum dapat dimuat')
+        setMapData(await response.json())
+      } catch (requestError) {
+        if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+        setError(requestError instanceof Error ? requestError.message : 'Gagal memuat lapisan peta')
+      } finally {
+        if (!controller.signal.aborted) setMapLoading(false)
+      }
+    }, filters.search ? 350 : 30)
+    return () => { controller.abort(); clearTimeout(timer) }
+  }, [mapQuery, filters.search])
+
+  const patchFilter = useCallback((patch: Partial<TaggingFilterState>, preferredZoom?: number) => {
     setFilters(current => ({ ...current, ...patch }))
     setPage(1)
-  }
+    if (preferredZoom) setZoom(preferredZoom)
+  }, [])
 
-  async function openDetail(assignmentId: string) {
+  const openDetail = useCallback(async (assignmentId: string) => {
     setDetail({ assignment_id: assignmentId, loading: true }); setDetailWarnings([])
     const res = await fetch(`/api/admin/tagging/records/${encodeURIComponent(assignmentId)}`)
     const json = await res.json()
     if (!res.ok) { setDetail({ assignment_id: assignmentId, error: json.error ?? 'Gagal memuat detail' }); return }
     setDetail(json.data); setDetailWarnings(json.warnings ?? [])
-  }
+  }, [])
+
+  const selectSubSls = useCallback((code: string) => patchFilter({
+    kdkec: code.slice(0, 7),
+    kddesa: code.slice(0, 10),
+    idsls: code.slice(0, 14),
+    idsubsls: code,
+  }, 17), [patchFilter])
 
   const s = summary.summary ?? {}
   const warningRate = number(s.total) ? (number(s.with_warning) / number(s.total)) * 100 : 0
@@ -155,7 +199,7 @@ export default function TaggingDashboardClient() {
       </section>
 
       {error && <div className={styles.errorBanner}>⚠ {error}</div>}
-      {!summary.batch && !loading ? (
+      {!summary.batch && !summaryLoading ? (
         <section className={styles.emptyState}>
           <span>◌</span><h2>Belum ada snapshot tagging aktif</h2>
           <p>Impor file Excel tagging dari menu Import Data untuk mengaktifkan peta dan audit.</p>
@@ -172,16 +216,16 @@ export default function TaggingDashboardClient() {
           </section>
 
           <section className={styles.filters} aria-label="Filter data tagging">
-            <FilterSelect label="Kecamatan" value={filters.kdkec} options={options.kecamatan} onChange={value => patchFilter({ kdkec: value, kddesa: '', idsls: '', idsubsls: '' })} />
-            <FilterSelect label="Desa/Kelurahan" value={filters.kddesa} options={options.desa} disabled={!filters.kdkec} onChange={value => patchFilter({ kddesa: value, idsls: '', idsubsls: '' })} />
-            <FilterSelect label="SLS" value={filters.idsls} options={options.sls} disabled={!filters.kddesa} onChange={value => patchFilter({ idsls: value, idsubsls: '' })} />
-            <FilterSelect label="Sub-SLS" value={filters.idsubsls} options={options.subsls} disabled={!filters.idsls} onChange={value => patchFilter({ idsubsls: value })} />
+            <FilterSelect label="Kecamatan" value={filters.kdkec} options={options.kecamatan} onChange={value => patchFilter({ kdkec: value, kddesa: '', idsls: '', idsubsls: '' }, 11)} />
+            <FilterSelect label="Desa/Kelurahan" value={filters.kddesa} options={options.desa} disabled={!filters.kdkec} onChange={value => patchFilter({ kddesa: value, idsls: '', idsubsls: '' }, value ? 13 : 11)} />
+            <FilterSelect label="SLS" value={filters.idsls} options={options.sls} disabled={!filters.kddesa} onChange={value => patchFilter({ idsls: value, idsubsls: '' }, value ? 15 : 13)} />
+            <FilterSelect label="Sub-SLS" value={filters.idsubsls} options={options.subsls} disabled={!filters.idsls} onChange={value => patchFilter({ idsubsls: value }, value ? 17 : 15)} />
             <label><span>Status</span><select value={filters.status} onChange={e => patchFilter({ status: e.target.value })}><option value="">Semua status</option>{options.statuses.map(o => <option key={o.code} value={o.code}>{o.code} ({format(o.total)})</option>)}</select></label>
             <label><span>Warning</span><select value={filters.warning} onChange={e => patchFilter({ warning: e.target.value })}><option value="">Semua kondisi</option>{WARNING_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label><span>Jenis tagging</span><select value={filters.kind} onChange={e => patchFilter({ kind: e.target.value })}><option value="">Keluarga & usaha</option><option value="keluarga">Keluarga</option><option value="usaha">Bangunan usaha</option></select></label>
             <label><span>Kualitas GPS</span><select value={filters.accuracy} onChange={e => patchFilter({ accuracy: e.target.value })}><option value="">Semua akurasi</option><option value="good">Baik (≤50 m)</option><option value="low">Rendah (&gt;50 m)</option><option value="missing">Koordinat kosong</option></select></label>
             <label className={styles.searchField}><span>Cari assignment / kode</span><input value={filters.search} onChange={e => patchFilter({ search: e.target.value })} placeholder="UUID atau full code…" /></label>
-            <button className={styles.resetButton} onClick={() => { setFilters(EMPTY_FILTERS); setPage(1) }} disabled={!Object.values(filters).some(Boolean)}>Reset filter</button>
+            <button className={styles.resetButton} onClick={() => { setFilters(EMPTY_FILTERS); setPage(1); setZoom(11) }} disabled={!Object.values(filters).some(Boolean)}>Reset filter</button>
           </section>
 
           <section className={styles.mapSection}>
@@ -194,18 +238,14 @@ export default function TaggingDashboardClient() {
             <div className={styles.mapFrame}>
               <TaggingMap
                 data={mapData}
+                dataVersion={mapQuery}
                 metric={metric}
                 onZoom={setZoom}
                 onSelectAssignment={openDetail}
-                onSelectSubSls={code => patchFilter({
-                  kdkec: code.slice(0, 7),
-                  kddesa: code.slice(0, 10),
-                  idsls: code.slice(0, 14),
-                  idsubsls: code,
-                })}
+                onSelectSubSls={selectSubSls}
               />
-              {loading && <div className={styles.mapBusy}>Memperbarui lapisan…</div>}
-              {mapData.mode === 'points' && mapData.truncated && <div className={styles.mapNotice}>Maksimum 5.000 titik ditampilkan. Persempit filter untuk audit lengkap.</div>}
+              {mapLoading && <div className={styles.mapBusy}>Memperbarui lapisan…</div>}
+              {'truncated' in mapData && mapData.truncated && <div className={styles.mapNotice}>{mapData.mode === 'points' ? 'Maksimum 2.000 titik ditampilkan.' : 'Cluster dipadatkan untuk menjaga performa.'} Persempit filter untuk audit lengkap.</div>}
               <div className={styles.legend}><strong>Mode {mapData.mode === 'polygons' ? 'poligon' : mapData.mode === 'clusters' ? 'cluster' : 'titik'}</strong><span><i className={styles.legendOrange} /> volume/normal</span><span><i className={styles.legendRed} /> warning tinggi</span><span><i className={styles.legendInk} /> konflik/duplikat</span></div>
             </div>
           </section>

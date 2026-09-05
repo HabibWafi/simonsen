@@ -12,11 +12,21 @@ export type TaggingFilterState = {
 
 export type TaggingOption = { code: string; name?: string; total: number }
 
+export type TaggingMapViewport = {
+  key: string
+  bounds: [[number, number], [number, number]]
+}
+
+type TaggingMapContext = {
+  viewport?: TaggingMapViewport
+  contextGeojson?: GeoJSON.FeatureCollection
+}
+
 export type TaggingMapResponse =
-  | { mode: 'empty'; data: [] }
-  | { mode: 'polygons'; geojson: GeoJSON.FeatureCollection }
-  | { mode: 'clusters'; data: TaggingCluster[] }
-  | { mode: 'points'; data: TaggingPoint[]; truncated?: boolean }
+  | ({ mode: 'empty'; data: [] } & TaggingMapContext)
+  | ({ mode: 'polygons'; geojson: GeoJSON.FeatureCollection } & TaggingMapContext)
+  | ({ mode: 'clusters'; data: TaggingCluster[]; truncated?: boolean } & TaggingMapContext)
+  | ({ mode: 'points'; data: TaggingPoint[]; truncated?: boolean } & TaggingMapContext)
 
 export type TaggingCluster = {
   latitude: number

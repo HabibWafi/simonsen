@@ -27,5 +27,5 @@ export async function GET(req: NextRequest) {
   ])
   return NextResponse.json({
     kecamatan: kecResult[0], desa: desaResult[0], sls: slsResult[0], subsls: subslsResult[0], statuses: statusResult[0],
-  }, { headers: { 'Cache-Control': 'private, no-store' } })
+  }, { headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=600' } })
 }

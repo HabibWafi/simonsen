@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const batchId = Number(batch.id)
   const where = buildTaggingWhere(batchId, filtersFromUrl(new URL(req.url)))
 
-  const [[totals], [statuses], [kinds]] = await Promise.all([
+  const [[totals], [statuses]] = await Promise.all([
     pool.execute(
       `SELECT COUNT(*) total,
         SUM(status_conflict=1) status_conflicts,
@@ -23,32 +23,36 @@ export async function GET(req: NextRequest) {
         SUM(mapped_code=0) unmapped_codes,
         SUM(inside_subsls=0) outside_subsls,
         SUM(warning_count>0) with_warning,
-        AVG(CASE WHEN geotag_accuracy IS NOT NULL THEN geotag_accuracy END) avg_accuracy
-       FROM tagging_assignment a WHERE ${where.sql}`, where.params,
-    ),
-    pool.execute(
-      `SELECT status_alias status, COUNT(*) total FROM tagging_assignment a
-       WHERE ${where.sql} AND status_conflict=0 GROUP BY status_alias ORDER BY total DESC`, where.params,
-    ),
-    pool.execute(
-      `SELECT
+        AVG(CASE WHEN geotag_accuracy IS NOT NULL THEN geotag_accuracy END) avg_accuracy,
         SUM(ada_keluarga_label IS NOT NULL) keluarga,
         SUM(ada_bang_usaha_label IS NOT NULL) usaha,
         SUM(ada_keluarga_label LIKE '%Baru%') keluarga_baru,
         SUM(ada_bang_usaha_label LIKE '%Baru%') usaha_baru
        FROM tagging_assignment a WHERE ${where.sql}`, where.params,
     ),
+    pool.execute(
+      `SELECT status_alias status, COUNT(*) total FROM tagging_assignment a
+       WHERE ${where.sql} AND status_conflict=0 GROUP BY status_alias ORDER BY total DESC`, where.params,
+    ),
   ]) as [
     [Array<Record<string, number | string | null>>, unknown],
     [Array<Record<string, number | string>>, unknown],
-    [Array<Record<string, number | string | null>>, unknown],
   ]
+
+  const summary = totals[0] ?? {}
 
   return NextResponse.json({
     batch: {
       id: batch.id, filename: batch.filename, created_at: batch.created_at, completed_at: batch.completed_at,
       raw_rows: batch.raw_rows, unique_assignments: batch.unique_assignments,
     },
-    summary: totals[0] ?? {}, statuses, kinds: kinds[0] ?? {},
-  }, { headers: { 'Cache-Control': 'private, no-store' } })
+    summary,
+    statuses,
+    kinds: {
+      keluarga: summary.keluarga ?? 0,
+      usaha: summary.usaha ?? 0,
+      keluarga_baru: summary.keluarga_baru ?? 0,
+      usaha_baru: summary.usaha_baru ?? 0,
+    },
+  }, { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=120' } })
 }
