@@ -151,7 +151,7 @@ export default function TaggingMap({ data, dataVersion, metric, onZoom, onSelect
     <MapEvents onZoom={onZoom} />
     <FitViewport viewport={data.viewport} />
     {polygons && <GeoJSON key={`metric-${dataVersion}`} data={polygons} style={style} onEachFeature={onEachFeature} />}
-    {contextPolygons && <GeoJSON key={`context-${dataVersion}`} data={contextPolygons} style={{ color: '#E8751A', weight: 1.4, opacity: .9, fillColor: '#FDBA74', fillOpacity: .06 }} onEachFeature={onEachContextFeature} />}
+    {contextPolygons && <GeoJSON key={`context-${dataVersion}`} data={contextPolygons} style={{ color: '#C2410C', weight: 2.5, opacity: 1, dashArray: '7 5', fillColor: '#F59E0B', fillOpacity: .1 }} onEachFeature={onEachContextFeature} />}
     {data.mode === 'clusters' && <ClusterLayer data={data.data} />}
     {data.mode === 'points' && <PointLayer data={data.data} onSelectAssignment={onSelectAssignment} />}
   </MapContainer>

@@ -36,8 +36,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ mode: 'polygons', geojson: { type: 'FeatureCollection', features }, viewport: region.viewport }, { headers: MAP_CACHE })
   }
 
-  const narrowScope = Boolean(filters.kddesa || filters.idsls || filters.idsubsls)
-  if (zoom <= 15 || (!narrowScope && zoom < 17)) {
+  const pointReady = filters.idsubsls
+    ? zoom >= 15
+    : filters.idsls
+      ? zoom >= 15
+      : filters.kddesa
+        ? zoom >= 16
+        : zoom >= 17
+  if (!pointReady) {
     const decimals = zoom <= 13 ? 2 : 3
     const [rows] = await pool.execute(
       `SELECT ROUND(geotag_latitude, ${decimals}) latitude, ROUND(geotag_longitude, ${decimals}) longitude,
