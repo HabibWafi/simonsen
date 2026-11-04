@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { kategoriUsaha } from '@/lib/mockData'
 import WaveLoop from '@/components/decor/WaveLoop'
-import type { Tahapan, TahapanAkses, TahapanAksesTipe } from '@/types'
+import type { Tahapan } from '@/types'
+import { useTahapan } from '@/hooks/useTahapan'
+import { pendataanStage } from '@/lib/tahapan'
 
 const faqItems = [
   {
@@ -31,34 +33,8 @@ const statusColor: Record<string, { dot: string; badge_bg: string; badge_color: 
   'akan-datang': { dot: '#EDE3D8', badge_bg: '#F5F5F5', badge_color: '#6B6B6B', label: 'Akan Datang' },
 }
 
-const TIPE_META: Record<TahapanAksesTipe, { icon: string; label: string; bg: string; color: string }> = {
-  drive:       { icon: '📁', label: 'Drive',  bg: '#E0F0FF', color: '#1877F2' },
-  dokumen:     { icon: '📄', label: 'Dokumen', bg: '#E8FFF3', color: '#00A651' },
-  spreadsheet: { icon: '📊', label: 'Sheet',  bg: '#FFF4E6', color: '#D97706' },
-  form:        { icon: '📝', label: 'Form',   bg: '#F3E8FF', color: '#7C3AED' },
-  link:        { icon: '🔗', label: 'Link',   bg: '#F5F5F5', color: '#6B6B6B' },
-}
-
-function AksesPill({ akses }: { akses: TahapanAkses }) {
-  const meta = TIPE_META[akses.tipe] ?? TIPE_META.link
-  return (
-    <a href={akses.url} target="_blank" rel="noopener noreferrer" style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '6px 12px', borderRadius: 99,
-      background: meta.bg, color: meta.color,
-      fontSize: 12, fontWeight: 700, textDecoration: 'none',
-      border: `1px solid ${meta.color}33`,
-      transition: 'all .15s',
-    }} className="akses-pill" title={akses.nama}>
-      <span style={{ fontSize: 13 }}>{meta.icon}</span>
-      <span style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{akses.nama}</span>
-    </a>
-  )
-}
-
 function TahapanCard({ item }: { item: Tahapan }) {
   const sc = statusColor[item.status] ?? statusColor['akan-datang']
-  const akses = item.akses ?? []
   return (
     <div style={{ background: 'white', borderRadius: 14, padding: 22, border: '1px solid #EDE3D8', boxShadow: '0 2px 16px rgba(232,117,26,.07)' }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: '#C85E0A', marginBottom: 6 }}>{item.periode}</div>
@@ -68,27 +44,14 @@ function TahapanCard({ item }: { item: Tahapan }) {
       <p style={{ fontSize: 13, color: '#6B6B6B', lineHeight: 1.65, marginBottom: 12 }}>{item.deskripsi}</p>
       <span style={{ background: sc.badge_bg, color: sc.badge_color, fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 99, display: 'inline-block' }}>{sc.label}</span>
 
-      {akses.length > 0 && (
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed #EDE3D8' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: .8, color: '#8C7B6B', marginBottom: 8 }}>
-            📎 Akses Lanjutan
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {akses.map(a => <AksesPill key={a.id} akses={a} />)}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
 export default function TahapanPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
-  const [tahapan, setTahapan] = useState<Tahapan[]>([])
-
-  useEffect(() => {
-    fetch('/api/tahapan').then(r => r.json()).then(j => setTahapan(j.data ?? [])).catch(() => {})
-  }, [])
+  const { tahapan } = useTahapan()
+  const pendataanSelesai = pendataanStage(tahapan)?.status === 'selesai'
 
   return (
     <>
@@ -106,7 +69,7 @@ export default function TahapanPage() {
           </div>
           <h1 style={{ fontSize: 'clamp(28px,4vw,48px)', fontWeight: 800, color: 'white', marginBottom: 12, lineHeight: 1.2 }}>Tahapan Sensus Ekonomi 2026</h1>
           <p style={{ fontSize: 16, color: 'rgba(255,255,255,.85)', lineHeight: 1.75, maxWidth: 640 }}>
-            Rangkaian kegiatan SE2026 Kabupaten Musi Rawas dari sosialisasi hingga publikasi hasil. Tiap tahapan dilengkapi tombol akses ke dokumen pendukung, panduan, dan form terkait.
+            Rangkaian kegiatan SE2026 Kabupaten Musi Rawas dari sosialisasi hingga publikasi hasil. Status kegiatan diperbarui sesuai jadwal pelaksanaan.
           </p>
         </div>
         <svg viewBox="0 0 1440 80" style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }} preserveAspectRatio="none">
@@ -132,12 +95,12 @@ export default function TahapanPage() {
               return (
                 <div key={item.id} style={{ display: 'flex', gap: 0, alignItems: 'center', marginBottom: 36, position: 'relative' }} className="tl-row">
                   {/* Left side */}
-                  <div style={{ flex: 1, padding: isRight ? '0 56px 0 0' : '0', display: 'flex', justifyContent: 'flex-end' }}>
-                    {isRight && <div style={{ maxWidth: 420, width: '100%' }}><TahapanCard item={item} /></div>}
+                  <div className="tl-card" style={{ flex: 1, order: isRight ? 0 : 2, padding: isRight ? '0 56px 0 0' : '0 0 0 56px', display: 'flex', justifyContent: isRight ? 'flex-end' : 'flex-start' }}>
+                    <div style={{ maxWidth: 420, width: '100%' }}><TahapanCard item={item} /></div>
                   </div>
 
                   {/* Center dot */}
-                  <div style={{ position: 'relative', zIndex: 2, flexShrink: 0 }}>
+                  <div className="tl-dot" style={{ order: 1, position: 'relative', zIndex: 2, flexShrink: 0 }}>
                     {item.status === 'aktif' && <div style={{ position: 'absolute', inset: -8, borderRadius: '50%', border: '2px solid rgba(232,117,26,.3)', animation: 'pulseRing 1.4s ease-out infinite' }} />}
                     <div style={{ width: 52, height: 52, borderRadius: '50%', background: sc.dot, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, color: 'white', boxShadow: item.status !== 'akan-datang' ? `0 0 0 6px ${sc.dot}22` : 'none', border: '3px solid white' }}>
                       {item.status === 'selesai' ? '✓' : item.icon}
@@ -145,9 +108,7 @@ export default function TahapanPage() {
                   </div>
 
                   {/* Right side */}
-                  <div style={{ flex: 1, padding: !isRight ? '0 0 0 56px' : '0', display: 'flex', justifyContent: 'flex-start' }}>
-                    {!isRight && <div style={{ maxWidth: 420, width: '100%' }}><TahapanCard item={item} /></div>}
-                  </div>
+                  <div className="tl-spacer" style={{ flex: 1, order: isRight ? 2 : 0 }} />
                 </div>
               )
             })}
@@ -202,12 +163,12 @@ export default function TahapanPage() {
       {/* CTA */}
       <section style={{ background: '#C85E0A', padding: '56px 24px', textAlign: 'center' as const }}>
         <div style={{ maxWidth: 640, margin: '0 auto' }}>
-          <h2 style={{ fontSize: 'clamp(22px,3vw,32px)', fontWeight: 800, color: 'white', marginBottom: 14 }}>Siap Berpartisipasi dalam SE2026?</h2>
-          <p style={{ fontSize: 15, color: 'rgba(255,255,255,.85)', marginBottom: 28 }}>Daftarkan usaha Anda sekarang atau hubungi petugas BPS terdekat di Kabupaten Musi Rawas.</p>
+          <h2 style={{ fontSize: 'clamp(22px,3vw,32px)', fontWeight: 800, color: 'white', marginBottom: 14 }}>{pendataanSelesai ? 'Pendataan SE2026 Telah Selesai' : 'Siap Berpartisipasi dalam SE2026?'}</h2>
+          <p style={{ fontSize: 15, color: 'rgba(255,255,255,.85)', marginBottom: 28 }}>{pendataanSelesai ? 'Terima kasih atas partisipasi Anda. Pantau perkembangan hasil pendataan SE2026 Kabupaten Musi Rawas.' : 'Daftarkan usaha Anda sekarang atau hubungi petugas BPS terdekat di Kabupaten Musi Rawas.'}</p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <a href="https://sensus.bps.go.id/se2026" target="_blank" rel="noopener noreferrer" style={{ padding: '13px 28px', borderRadius: 8, background: 'white', color: '#C85E0A', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
+            {pendataanSelesai ? <Link href="/se/2026/progress" style={{ padding: '13px 28px', borderRadius: 8, background: 'white', color: '#C85E0A', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>Lihat Progress Wilayah</Link> : <a href="https://sensus.bps.go.id/se2026" target="_blank" rel="noopener noreferrer" style={{ padding: '13px 28px', borderRadius: 8, background: 'white', color: '#C85E0A', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
               Daftar Online Sekarang
-            </a>
+            </a>}
             <Link href="/se/2026/faq" style={{ padding: '13px 28px', borderRadius: 8, background: 'transparent', color: 'white', border: '1.5px solid rgba(255,255,255,.6)', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
               Lihat FAQ Lengkap
             </Link>
@@ -216,13 +177,12 @@ export default function TahapanPage() {
       </section>
 
       <style>{`
-        .akses-pill:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
         @media (max-width: 768px) {
           .timeline-line { left: 24px !important; transform: none !important; }
           .tl-row { flex-direction: row !important; align-items: flex-start !important; padding-left: 0; }
-          .tl-row > div:first-child { display: none !important; }
-          .tl-row > div:last-child  { flex: 1 !important; padding: 0 0 0 56px !important; justify-content: flex-start !important; }
-          .tl-row > div:nth-child(2) { margin-left: 0; }
+          .tl-spacer { display: none !important; }
+          .tl-card { flex: 1 !important; order: 2 !important; padding: 0 0 0 24px !important; justify-content: flex-start !important; min-width: 0; }
+          .tl-dot { order: 1 !important; }
         }
       `}</style>
     </>

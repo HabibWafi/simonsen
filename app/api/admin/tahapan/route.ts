@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { requireRole } from '@/lib/auth-guard'
 import { tahapanSchema } from '@/lib/validators/tahapan'
+import { resolveTahapan } from '@/lib/tahapan'
+import type { Tahapan } from '@/types'
 
 export async function GET() {
   const guard = await requireRole(['admin', 'koordinator'])
   if (guard instanceof NextResponse) return guard
 
   const [rows] = await pool.execute(
-    `SELECT id, judul, periode, start_date, end_date, status, deskripsi, icon, urutan, created_at, updated_at
+    `SELECT id, judul, periode, DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date, DATE_FORMAT(end_date, '%Y-%m-%d') AS end_date, status, deskripsi, icon, urutan, created_at, updated_at
      FROM tahapan ORDER BY urutan ASC, id ASC`,
-  ) as [any[], any]
-  return NextResponse.json({ data: rows })
+  ) as [Tahapan[], unknown]
+  const now = Date.now()
+  return NextResponse.json({ data: rows.map(item => resolveTahapan(item, now)) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
