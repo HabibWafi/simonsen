@@ -1,5 +1,7 @@
 # Security review
 
+Pembaruan terakhir: **5 November 2026**. Hasil audit 15 moderate di bawah adalah catatan historis; pemeriksaan ulang lengkap sekarang menghasilkan **0**, dengan rincian pada bagian verifikasi CVE-2026-118764 di akhir laporan.
+
 Tanggal/zona waktu: 4 November 2026, Asia/Jakarta.
 Mode: existing; pemeriksaan dan perbaikan lokal repository `simonsen`.
 Baseline: commit `4acc7d976634e3c7cc12704942b9cc242d21ddb8`, working tree bersih sebelum audit.
@@ -116,3 +118,29 @@ Log Hostinger `01a1a781-596d-71d9-a9d1-06e38cbf99ec` untuk commit `6a5c085` meng
 Inspeksi Next.js 16.4.5 lokal (`dist/server/config-shared.js` dan `dist/build/index.js:getNumberOfWorkers`) menunjukkan default menggunakan jumlah CPU terlihat dikurangi satu, sedangkan `experimental.cpus` dapat membatasi pool worker secara eksplisit. Konfigurasi proyek sekarang menetapkan `experimental: { cpus: 1 }`, mengurangi proses build yang masing-masing dapat memuat runtime native/thread pool sendiri. Ini kontrol penggunaan resource build, bukan patch kerentanan atau perubahan kuota hosting.
 
 Verifikasi: build lokal dijalankan dengan `CIRCLE_NODE_TOTAL=64` untuk mensimulasikan dasar perhitungan default 63 worker pada versi ini. Output aktual menampilkan `Collecting page data using 1 worker` dan `Generating static pages using 1 worker (64/64)`; kompilasi, TypeScript, dan pengemasan standalone **lulus sampai selesai**. Simulasi ini tidak mereproduksi kuota thread Linux Hostinger. Jika build hosting tetap gagal dengan satu worker, diperlukan bukti dan penyesuaian kuota dari penyedia hosting. Status keberhasilan deployment tetap menunggu log build berikutnya.
+
+## Verifikasi ulang CVE-2026-118764 — 5 November 2026, Asia/Jakarta
+
+Mode: existing, pemeriksaan terfokus pada laporan Hostinger untuk `minimatch@3.1.5`. Baseline source: `14ad6e4f4daecaa2850fd8536bbc49ab2a1ab440`. SHA-256 lockfile tetap `3d74671f473ec1aa3e538ebc6faf46020ba7d7b55efeb1e29f4fe5bd7ea515e0`.
+
+### Bukti terkini dan keputusan temuan
+
+- Tangkapan layar pengguna mencantumkan rentang lama `<11.0.1`. [GitHub Advisory Database GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249), diperbarui **4 November 2026**, sekarang mencantumkan rentang terdampak **`>=7.0.0 <11.0.1`** dan patched **11.0.1**. Halaman tersebut diperiksa kembali pada 5 November 2026.
+- [Advisori maintainer](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249) menjelaskan amplifikasi `globParts` pada preprocessing `optimizationLevel >= 2`. Perbedaan rentang metadata lama menjelaskan hasil scanner awal; hasil sekarang didasarkan pada rentang resmi yang sudah dikoreksi.
+- `package-lock.json` dan `npm ls minimatch --all` menunjukkan dua versi, keduanya dependency development: **3.1.5** pada rantai ESLint/plugin React/import/accessibility, dan **11.0.4** pada `@typescript-eslint/typescript-estree` melalui override yang sudah ada. Tidak ditemukan versi 7 sampai 11.0.0 pada lockfile.
+- Keputusan untuk **CVE ini pada dependency source yang diperiksa: NOT_APPLICABLE**. Versi 3.1.5 berada di luar rentang terdampak terbaru; versi 11.0.4 sudah melewati versi perbaikan. Peringatan di tangkapan layar konsisten dengan pemetaan advisori lama. Database scanner dan instalasi aktif Hostinger belum dapat dibaca langsung, sehingga hilangnya peringatan hosting belum terverifikasi.
+- Versi 3 dan 11 memakai bentuk ekspor yang berbeda. Tidak dilakukan override major menyeluruh pada pemanggil legacy hanya untuk menyembunyikan peringatan. Dukungan ESLint 9 tetap merupakan pekerjaan pemeliharaan terpisah sebagaimana dicatat di atas; keputusan CVE ini tidak menutup risiko toolchain lain.
+
+### Perubahan dan hasil pemeriksaan
+
+- `security:check` sekarang menjalankan `npm audit --include=dev` agar pemeriksaan mencakup alat lint development juga. Tidak ada advisory yang diabaikan dan tidak ada pembaruan versi atau perubahan lockfile pada tindak lanjut ini.
+- `npm audit --include=dev --json`: exit **0**, **0** kerentanan; metadata mencakup 119 production, 329 development, dan 87 optional (kategori dapat beririsan, total metadata 511).
+- `npm audit --omit=dev --json`: exit **0**, **0** kerentanan.
+- `npm run security:check`: **lulus**, 16/16 tes keamanan dan audit lengkap 0. `npm run test:schedule`: **lulus**, 6/6 tes. Npm CLI resmi sementara digunakan dengan wrapper PATH sementara untuk pemanggilan npm bersarang; percobaan awal memakai wrapper bawaan paket gagal menemukan modul npm, lalu lingkungan CLI diperbaiki. Tidak ada perubahan instalasi global.
+- `git diff --check`: **lulus**. Build aplikasi tidak diulang karena perubahan hanya perintah pemeriksaan dan dokumentasi, tanpa perubahan dependency atau kode aplikasi.
+
+### Deployment dan batas verifikasi
+
+Source siap diteruskan untuk cakupan tindak lanjut ini (**READY_FOR_DEVELOPMENT**); tidak diperlukan patch dependency tambahan untuk CVE-2026-118764 pada lockfile tersebut. Ini bukan klaim bahwa seluruh server bebas kerentanan. Commit dokumentasi/perintah pemeriksaan dapat mengikuti alur GitHub ke Hostinger yang telah diotorisasi pengguna; keberhasilan redeploy dan hasil scan hosting tetap **NEEDS_EVIDENCE** sampai log/status aktual tersedia.
+
+Tindakan hosting: jalankan pemindaian ulang dengan basis advisori terbaru. Jika CVE yang sama tetap ditempelkan pada 3.1.5, berikan tautan advisori dan rentang terkoreksi tersebut kepada dukungan Hostinger untuk koreksi pemetaan. Tidak perlu rollback dependency atau menghapus paket secara manual dari server.

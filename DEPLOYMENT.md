@@ -269,6 +269,11 @@ Saat ada perubahan code:
 ### Pemeriksaan keamanan sebelum rollout
 
 - Baca `security/security-review.md` untuk temuan, batas pengujian, dan hasil audit terbaru.
+- `npm run security:check` menjalankan tes keamanan dan audit npm lengkap,
+  termasuk dependency development. Jika hasil scanner hosting berbeda, cocokkan
+  versi paket dan rentang advisori terbaru; CVE-2026-118764 kini memiliki rentang
+  `>=7.0.0 <11.0.1`, sehingga `minimatch@3.1.5` berada di luar rentang itu.
+  Bukti dan langkah pemindaian ulang dicatat pada laporan keamanan.
 - Pasang batas body, timeout, dan rate limit login pada reverse proxy hosting.
   API import Excel membatasi file 20MB, arsip setelah ekstraksi 100MB/2048 entri;
   upload gambar 8MB/24 juta piksel; API eksternal JSON 4MB.
