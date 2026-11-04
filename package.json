@@ -10,10 +10,12 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "vendor:eslint": "node scripts/vendor-eslint-plugins.mjs",
     "test:security": "node --test --import ./tests/register-typescript.mjs tests/security.test.mjs",
     "test:schedule": "node --test --import ./tests/register-typescript.mjs tests/schedule.test.mjs",
+    "test:lint-toolchain": "node --test tests/lint-toolchain.test.mjs",
     "test:security:smoke": "node tests/security-smoke.mjs",
-    "security:check": "npm run test:security && npm audit --include=dev",
+    "security:check": "npm run test:security && npm run test:lint-toolchain && npm audit --include=dev",
     "db:migrate-tagging": "node scripts/migrate-iterasi23.mjs",
     "db:import-tagging": "node scripts/import-tagging.mjs"
   },
@@ -46,13 +48,15 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "eslint": "^9",
-    "eslint-config-next": "16.4.5"
+    "@eslint/compat": "2.1.1",
+    "eslint": "10.14.0",
+    "eslint-config-next": "16.4.5",
+    "eslint-plugin-react": "file:vendor/eslint-plugin-react-7.37.5+simonsen.1.tgz",
+    "eslint-plugin-import": "file:vendor/eslint-plugin-import-2.32.0+simonsen.3.tgz",
+    "eslint-plugin-jsx-a11y": "file:vendor/eslint-plugin-jsx-a11y-6.10.2+simonsen.1.tgz"
   },
   "overrides": {
     "postcss": "^8.5.32",
-    "@typescript-eslint/typescript-estree": {
-      "minimatch": "^11.0.4"
-    }
+    "minimatch": "11.0.4"
   }
 }

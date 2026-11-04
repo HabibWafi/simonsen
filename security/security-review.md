@@ -1,6 +1,6 @@
 # Security review
 
-Pembaruan terakhir: **5 November 2026**. Hasil audit 15 moderate di bawah adalah catatan historis; pemeriksaan ulang lengkap sekarang menghasilkan **0**, dengan rincian pada bagian verifikasi CVE-2026-118764 di akhir laporan.
+Pembaruan terakhir: **5 November 2026**. Hasil audit 15 moderate dan keberadaan minimatch 3 di bawah adalah catatan historis. Tindak lanjut terbaru memigrasikan seluruh cabang minimatch ke **11.0.4**; lihat bagian migrasi toolchain di akhir laporan.
 
 Tanggal/zona waktu: 4 November 2026, Asia/Jakarta.
 Mode: existing; pemeriksaan dan perbaikan lokal repository `simonsen`.
@@ -144,3 +144,29 @@ Mode: existing, pemeriksaan terfokus pada laporan Hostinger untuk `minimatch@3.1
 Source siap diteruskan untuk cakupan tindak lanjut ini (**READY_FOR_DEVELOPMENT**); tidak diperlukan patch dependency tambahan untuk CVE-2026-118764 pada lockfile tersebut. Ini bukan klaim bahwa seluruh server bebas kerentanan. Commit dokumentasi/perintah pemeriksaan dapat mengikuti alur GitHub ke Hostinger yang telah diotorisasi pengguna; keberhasilan redeploy dan hasil scan hosting tetap **NEEDS_EVIDENCE** sampai log/status aktual tersedia.
 
 Tindakan hosting: jalankan pemindaian ulang dengan basis advisori terbaru. Jika CVE yang sama tetap ditempelkan pada 3.1.5, berikan tautan advisori dan rentang terkoreksi tersebut kepada dukungan Hostinger untuk koreksi pemetaan. Tidak perlu rollback dependency atau menghapus paket secara manual dari server.
+
+## Migrasi seluruh cabang minimatch ke 11.0.4 — 5 November 2026
+
+Mode: existing; baseline `3a8d37f464b7f3023a58c279bc5d19b8cf5f77e1`. Pengguna meminta penggunaan minimatch versi terbaru setelah penjelasan perbedaan rentang CVE. Cakupan perubahan adalah dependency development dan kompatibilitas pemeriksaan kode, tanpa perubahan kode aplikasi atau versi dependency produksi.
+
+### Sumber dan implementasi
+
+- Registry npm resmi pada saat pemeriksaan mencantumkan minimatch **11.0.4** sebagai `latest` dan ESLint **10.14.0** sebagai `latest`. Angka major ini milik paket berbeda. `eslint-config-next@16.4.5` dan dokumentasi terpasangnya mendukung ESLint 10 pada Node 24 yang digunakan proyek.
+- Panduan [migrasi ESLint 10](https://eslint.org/docs/latest/use/migrate-to-10.0.0) mencatat penghapusan API context/token lama. Konfigurasi proyek memakai [`@eslint/compat`](https://eslint.org/blog/2024/05/eslint-compatibility-utilities/) 2.1.1 untuk mempertahankan perilaku plugin. Aturan lint tidak dinonaktifkan.
+- [Minimatch 11](https://github.com/isaacs/minimatch) menyediakan named export `minimatch` dan matcher non-regex; API pembentukan regex lama telah dihapus. Plugin React 7.37.5, import 2.32.0, dan jsx-a11y 6.10.2 masih merupakan rilis upstream terbaru saat diperiksa, tetapi meminta API callable minimatch 3.
+- Tiga plugin disimpan sebagai distribusi lokal berlisensi asli dengan build metadata `+simonsen.N`. Penyesuaian mencakup named import, penggunaan `Minimatch.match()` pada pembatasan modul internal, serta pola path Windows pada pembatasan direktori. Seluruh dependensi minimatch di manifest plugin menjadi 11.0.4. Tidak ada kode minimatch lama yang dibungkus atau versi paket lama yang disamarkan.
+- Skrip `scripts/vendor-eslint-plugins.mjs` mengunduh arsip upstream dengan versi tetap, memverifikasi SHA-512 sebelum ekstraksi, memeriksa jumlah penggantian source, dan membuat arsip tanpa lifecycle script. `vendor/README.md` memuat sumber, perubahan, langkah rebuild, serta syarat penghapusan patch saat upstream sudah mendukung API baru. Direct dev dependency memakai arsip root agar instalasi tidak bergantung pada override file relatif di dalam dependency transitif.
+- Root override **`minimatch: 11.0.4`** mencakup ESLint, config-array, typescript-estree, dan seluruh plugin. Lockfile baru hanya memuat versi minimatch 11.0.4. `security:check` menyertakan 16 regresi toolchain sebelum audit npm lengkap.
+
+### Verifikasi source yang telah dijalankan
+
+- `npm ls minimatch --all`: seluruh cabang **11.0.4**, tanpa versi 3, 7, 9, atau 10. ESLint terpasang **10.14.0**.
+- `node --test tests/lint-toolchain.test.mjs`: **16/16 lulus**, termasuk pola glob React, label aksesibilitas, cakupan dev dependency, urutan impor, allow/forbid modul internal, konstruktor matcher untuk pembatasan path, dan versi minimatch di seluruh lockfile.
+- Perbandingan lint pada 161 file baseline: **416 error / 35 warning sebelum dan sesudah**, tanpa fatal error. Perbandingan rule, severity, pesan, baris, dan kolom juga tidak menemukan perubahan diagnostik. Ini temuan lint lama yang masih perlu dirapikan, bukan kegagalan load plugin setelah upgrade. Helper/test/config yang baru atau berubah lulus lint tanpa diagnostik.
+- Perbandingan versi entri non-development pada lockfile: **tidak ada perubahan versi dependency produksi**. SHA-256 lockfile baru: `42237f52f9f9d80897120f1279797a29ef185682710d8046b38a0b344b59f5e3`.
+- `npm ci --ignore-scripts --no-audit`: **lulus**, memasang 417 paket dari lockfile dan arsip vendor. Seluruh pemeriksaan berikut dijalankan kembali sesudah instalasi bersih ini.
+- `npm run security:check`: **lulus**, 16 tes keamanan, 16 tes toolchain, dan audit lengkap **0 kerentanan**. `npm run test:schedule`: **6/6 lulus**. Total **38 tes lulus**.
+- `npm run build`: **lulus**, termasuk kompilasi, TypeScript, 64 halaman dengan satu worker, dan pengemasan standalone. Build memakai fallback tanpa DB lokal, sehingga tidak memverifikasi CRUD database atau koneksi produksi.
+- `git diff --check`: **lulus**. Tidak dilakukan payload eksploit, scanning produksi, migrasi DB, atau rotasi secret.
+
+Pemeliharaan berikutnya harus menguji plugin lokal ini saat versi lint berubah; hapus arsip dan adapter ketika rilis upstream sudah mendukungnya dan tes kompatibilitas tetap lulus. Deployment otomatis mengikuti otorisasi GitHub/main sebelumnya. Status proses aktif serta hasil scanner Hostinger tetap **NEEDS_EVIDENCE** sampai bukti hosting tersedia; source yang diperbarui tidak membuktikan semua worker telah berganti.
