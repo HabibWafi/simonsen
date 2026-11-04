@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:security": "node --test --import ./tests/register-typescript.mjs tests/security.test.mjs",
+    "test:schedule": "node --test --import ./tests/register-typescript.mjs tests/schedule.test.mjs",
     "test:security:smoke": "node tests/security-smoke.mjs",
     "security:check": "npm run test:security && npm audit --omit=dev",
     "db:migrate-tagging": "node scripts/migrate-iterasi23.mjs",

@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { mockPosts, kategoriUsaha, jadwalTimeline } from '@/lib/mockData'
+import { mockPosts, kategoriUsaha } from '@/lib/mockData'
 import WaveLoop from '@/components/decor/WaveLoop'
 import DotsPattern from '@/components/decor/DotsPattern'
 import ChevronAccent from '@/components/decor/ChevronAccent'
 import HeroLanding from '@/components/HeroLanding'
 import ProgressLiveSection from '@/components/ProgressLiveSection'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTahapan } from '@/hooks/useTahapan'
+import { pendataanStage } from '@/lib/tahapan'
+import type { Tahapan } from '@/types'
 
 const EASE = [0.22, 1, 0.36, 1] as const
 
@@ -61,6 +64,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function HomePage() {
+  const { tahapan } = useTahapan()
+  const pendataanSelesai = pendataanStage(tahapan)?.status === 'selesai'
   // null/[] = belum ada data nyata → komponen tampilkan loading, BUKAN angka dummy.
   const [stats, setStats] = useState<any>(null)
   const [progress, setProgress] = useState<any[]>([])
@@ -96,13 +101,13 @@ export default function HomePage() {
   return (
     <>
       {/* ── 1. HERO + countdown integrasi ── */}
-      <HeroLanding />
+      <HeroLanding tahapan={tahapan} />
 
       {/* ── 2. APA ITU SE2026 (target dari CTA "Pelajari SE2026") ── */}
       <ApaSection />
 
       {/* ── 3. TAHAPAN SE2026 ── */}
-      <TimelineSection />
+      <TimelineSection items={tahapan} />
 
       {/* ── 4. PROGRESS REALTIME + STATS COMBINED (redesigned) ── */}
       <ProgressLiveSection progress={top5Progress} stats={stats} />
@@ -122,15 +127,15 @@ export default function HomePage() {
           style={{ maxWidth: 640, margin: '0 auto', position: 'relative', zIndex: 1 }}
         >
           <p style={{ fontSize: 11, fontWeight: 700, color: '#E8751A', textTransform: 'uppercase' as const, letterSpacing: 1.5, marginBottom: 12 }}>Berkontribusi</p>
-          <h2 style={{ fontSize: 'clamp(22px,3vw,34px)', fontWeight: 800, color: '#1A1A1A', marginBottom: 14 }}>Apakah Usaha Anda Sudah Tercatat?</h2>
+          <h2 style={{ fontSize: 'clamp(22px,3vw,34px)', fontWeight: 800, color: '#1A1A1A', marginBottom: 14 }}>{pendataanSelesai ? 'Pendataan SE2026 Telah Selesai' : 'Apakah Usaha Anda Sudah Tercatat?'}</h2>
           <p style={{ fontSize: 15, color: '#6B6B6B', lineHeight: 1.75, marginBottom: 32 }}>
-            Bantu BPS Kabupaten Musi Rawas mendapatkan data ekonomi yang akurat dengan memastikan usaha Anda telah tercatat dalam Sensus Ekonomi 2026.
+            {pendataanSelesai ? 'Terima kasih atas partisipasi pelaku usaha dan petugas. Pantau hasil pendataan dan perkembangan pengolahan data SE2026 di Kabupaten Musi Rawas.' : 'Bantu BPS Kabupaten Musi Rawas mendapatkan data ekonomi yang akurat dengan memastikan usaha Anda telah tercatat dalam Sensus Ekonomi 2026.'}
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <motion.a whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.97 }} href="https://sensus.bps.go.id/se2026" target="_blank" rel="noopener noreferrer" style={{ padding: '14px 28px', borderRadius: 99, background: 'linear-gradient(135deg,#E8751A,#F5A623)', color: 'white', fontSize: 14, fontWeight: 700, textDecoration: 'none', boxShadow: '0 6px 20px rgba(232,117,26,.38)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {pendataanSelesai ? <Link href="/se/2026/progress" style={{ padding: '14px 28px', borderRadius: 99, background: '#E8751A', color: 'white', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>Lihat Progress Wilayah →</Link> : <motion.a whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.97 }} href="https://sensus.bps.go.id/se2026" target="_blank" rel="noopener noreferrer" style={{ padding: '14px 28px', borderRadius: 99, background: 'linear-gradient(135deg,#E8751A,#F5A623)', color: 'white', fontSize: 14, fontWeight: 700, textDecoration: 'none', boxShadow: '0 6px 20px rgba(232,117,26,.38)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               Daftar Online Sekarang
               <ChevronAccent inline size={16} opacity={0.95} />
-            </motion.a>
+            </motion.a>}
             <motion.div whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} style={{ display: 'inline-block' }}>
               <Link href="/se/2026/faq" style={{ padding: '14px 28px', borderRadius: 99, background: 'rgba(255,255,255,.6)', color: '#E8751A', border: '1.5px solid rgba(232,117,26,.4)', fontSize: 14, fontWeight: 600, textDecoration: 'none', display: 'inline-block', backdropFilter: 'blur(8px)' }}>
                 Tanya Jawab
@@ -152,13 +157,8 @@ export default function HomePage() {
 }
 
 /* ── TIMELINE SECTION ── */
-function TimelineSection() {
-  const jadwal = [
-    { id: 1, judul: 'Sosialisasi & Persiapan',   periode: 'Jan – Apr 2026',        status: 'selesai' },
-    { id: 2, judul: 'Pelatihan Petugas',          periode: 'Apr – Mei 2026',        status: 'selesai' },
-    { id: 3, judul: 'Pencacahan Online',          periode: 'Mei – Agt 2026',        status: 'aktif' },
-    { id: 4, judul: 'Pendataan Door to Door',     periode: '15 Jun – 31 Agt 2026',  status: 'aktif' },
-  ]
+function TimelineSection({ items }: { items: Tahapan[] }) {
+  const jadwal = items.slice(0, 4)
   return (
     <section style={{ background: '#FAF8F5', padding: '80px 24px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>

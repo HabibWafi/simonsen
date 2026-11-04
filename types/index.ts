@@ -30,18 +30,6 @@ export interface Tahapan {
   urutan: number
   created_at?: string
   updated_at?: string
-  akses?: TahapanAkses[]
-}
-
-export type TahapanAksesTipe = 'drive' | 'dokumen' | 'spreadsheet' | 'form' | 'link'
-
-export interface TahapanAkses {
-  id: number
-  tahapan_id: number
-  nama: string
-  url: string
-  tipe: TahapanAksesTipe
-  urutan: number
 }
 
 // ---------- Desa ----------

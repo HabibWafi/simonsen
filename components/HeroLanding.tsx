@@ -6,13 +6,13 @@ import { motion, useScroll, useTransform, AnimatePresence, useReducedMotion } fr
 import { useRef, useState, useEffect } from 'react'
 import WaveLoop from '@/components/decor/WaveLoop'
 import DotsPattern from '@/components/decor/DotsPattern'
-import { jadwalTimeline } from '@/lib/mockData'
+import { pendataanDeadline, pendataanStage } from '@/lib/tahapan'
+import type { Tahapan } from '@/types'
 
 const EASE = [0.22, 1, 0.36, 1] as const
-const TARGET_DATE = new Date('2026-08-31T00:00:00+07:00').getTime()
 
-function getTimeLeft() {
-  const diff = TARGET_DATE - Date.now()
+function getTimeLeft(target: number, now: number) {
+  const diff = target - now
   if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 }
   return {
     days:    Math.floor(diff / 86400000),
@@ -32,7 +32,7 @@ const container = {
   show:   { transition: { staggerChildren: 0.12, delayChildren: 0.05 } },
 }
 
-export default function HeroLanding() {
+export default function HeroLanding({ tahapan }: { tahapan: Tahapan[] }) {
   const ref = useRef<HTMLDivElement>(null)
   const { scrollY } = useScroll()
   const reduce = useReducedMotion()
@@ -40,15 +40,20 @@ export default function HeroLanding() {
   const yDecor2 = useTransform(scrollY, [0, 400], [0, reduce ? 0 : 40])
   const yMascot = useTransform(scrollY, [0, 400], [0, reduce ? 0 : -20])
 
-  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
-  const [mounted, setMounted] = useState(false)
+  const [now, setNow] = useState<number | null>(null)
+  const target = pendataanDeadline(tahapan)
+  const mounted = now !== null
+  const pendataanSelesai = pendataanStage(tahapan)?.status === 'selesai' || (now !== null && now > target)
+  const countdown = getTimeLeft(target, now ?? target)
+  const ringkasan = tahapan.slice(0, 4)
 
   useEffect(() => {
-    setMounted(true)
-    setCountdown(getTimeLeft())
-    const id = setInterval(() => setCountdown(getTimeLeft()), 1000)
+    const tick = () => setNow(Date.now())
+    tick()
+    if (Date.now() > target) return
+    const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [target])
 
   const handlePelajariClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault()
@@ -236,27 +241,27 @@ export default function HeroLanding() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <p style={{ fontSize: 14, fontWeight: 800, color: '#1A1A1A', letterSpacing: -.2 }}>Jadwal Kegiatan SE2026</p>
               <motion.span
-                animate={{ scale: [1, 1.08, 1] }}
+                animate={pendataanSelesai ? undefined : { scale: [1, 1.08, 1] }}
                 transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
                 style={{
                   fontSize: 10, fontWeight: 800, color: 'white',
-                  background: '#E8751A', padding: '4px 10px',
+                  background: pendataanSelesai ? '#00A651' : '#E8751A', padding: '4px 10px',
                   borderRadius: 99, letterSpacing: .5,
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                 }}
               >
                 <span style={{ width: 6, height: 6, background: 'white', borderRadius: '50%', display: 'inline-block' }} />
-                LIVE
+                {pendataanSelesai ? 'SELESAI' : 'JADWAL'}
               </motion.span>
             </div>
 
             {/* Timeline items dengan connector garis */}
             <div style={{ position: 'relative' }}>
-              {jadwalTimeline.slice(0, 4).map((item, i) => {
-                const isLast = i === 3
+              {ringkasan.map((item, i) => {
+                const isLast = i === ringkasan.length - 1
                 const dotColor = item.status === 'selesai' ? '#00A651' : item.status === 'aktif' ? '#E8751A' : '#EDE3D8'
                 const lineColor = item.status === 'selesai' ? '#00A651' : item.status === 'aktif' ? '#E8751A' : '#EDE3D8'
-                const lineColorNext = (jadwalTimeline[i + 1]?.status === 'selesai') ? '#00A651' : (jadwalTimeline[i + 1]?.status === 'aktif' ? '#E8751A' : '#EDE3D8')
+                const lineColorNext = (ringkasan[i + 1]?.status === 'selesai') ? '#00A651' : (ringkasan[i + 1]?.status === 'aktif' ? '#E8751A' : '#EDE3D8')
                 return (
                   <motion.div
                     key={item.id}
@@ -328,15 +333,17 @@ export default function HeroLanding() {
                 border: '1px solid rgba(255,255,255,.25)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 20, flexShrink: 0,
-              }}>🕐</div>
+              }}>{pendataanSelesai ? '✓' : '🕐'}</div>
               <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.85)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 }}>Hitung Mundur</p>
-                <p style={{ fontSize: 16, fontWeight: 800, color: 'white', letterSpacing: -.2 }}>Akhir Pendataan Door-to-Door</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.85)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 }}>{pendataanSelesai ? 'Pendataan Selesai' : 'Hitung Mundur'}</p>
+                <p style={{ fontSize: 16, fontWeight: 800, color: 'white', letterSpacing: -.2 }}>{pendataanSelesai ? 'Terima kasih atas partisipasi Anda dalam SE2026' : 'Akhir Pendataan Door-to-Door'}</p>
               </div>
             </div>
 
             {/* Tengah — angka countdown */}
-            <div className="hero-cd-nums" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {pendataanSelesai ? (
+              <div role="status" style={{ background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 14, padding: '16px 22px', color: 'white', fontWeight: 800 }}>✓ Pendataan telah selesai</div>
+            ) : !mounted ? <span style={{ color: 'white' }}>Memuat jadwal…</span> : <div className="hero-cd-nums" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               {[
                 { val: countdown.days,    unit: 'HARI' },
                 { val: countdown.hours,   unit: 'JAM' },
@@ -371,6 +378,8 @@ export default function HeroLanding() {
                 </div>
               ))}
             </div>
+
+            }
 
             {/* Kanan — CTA */}
             <motion.div whileHover={{ y: -2, scale: 1.03 }} whileTap={{ scale: 0.97 }}>
