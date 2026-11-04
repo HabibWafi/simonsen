@@ -248,7 +248,7 @@ function FasihImportCard() {
       </p>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input type="file" accept=".xlsx,.xls" onChange={e => setFile(e.target.files?.[0] ?? null)} style={{ fontSize: 13 }} />
+        <input type="file" accept=".xlsx" aria-label="File progress Fasih XLSX, maksimal 20 MB" onChange={e => setFile(e.target.files?.[0] ?? null)} style={{ fontSize: 13 }} />
         <button onClick={submit} disabled={!file || busy} style={{
           padding: '10px 20px', borderRadius: 8, background: !file || busy ? '#E0D5C8' : '#E8751A',
           color: 'white', border: 'none', fontSize: 13, fontWeight: 700, cursor: !file || busy ? 'default' : 'pointer',
@@ -395,11 +395,11 @@ function ImportCard({
           </>
         ) : (
           <>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#3D3D3D' }}>Klik atau drag file .xlsx / .xls ke sini</div>
-            <div style={{ fontSize: 12, color: '#8C7B6B', marginTop: 4 }}>Max 10 MB</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#3D3D3D' }}>Klik atau drag file .xlsx ke sini</div>
+            <div style={{ fontSize: 12, color: '#8C7B6B', marginTop: 4 }}>Maksimal 20 MB</div>
           </>
         )}
-        <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={e => setFile(e.target.files?.[0] ?? null)} style={{ display: 'none' }} />
+        <input ref={fileRef} type="file" accept=".xlsx" aria-label="File import XLSX, maksimal 20 MB" onChange={e => setFile(e.target.files?.[0] ?? null)} style={{ display: 'none' }} />
       </div>
 
       <button onClick={upload} disabled={!file || busy} style={{

@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { readJson, RequestBodyError } from '@/lib/request-body'
 import { requireApiToken, checkRateLimit, logAudit } from '@/lib/api-guard'
 
 const SENSUS = 'se'
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   let body: any
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
+  try { body = await readJson(req) } catch (error) { return NextResponse.json({ error: 'Invalid JSON atau body melewati batas' }, { status: error instanceof RequestBodyError ? error.status : 400 }) }
   const rows = Array.isArray(body?.rows) ? body.rows : null
   if (!rows || rows.length === 0) return NextResponse.json({ error: 'Body harus berisi `rows` array non-kosong' }, { status: 400 })
   if (rows.length > 1000) return NextResponse.json({ error: 'Maksimal 1000 row per request' }, { status: 400 })

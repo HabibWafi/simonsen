@@ -19,7 +19,7 @@ export default auth((req) => {
 
   const [, kode, tahun, sub] = m
 
-  if (!session) {
+  if (!session?.user) {
     const loginUrl = new URL(`/${kode}/${tahun}/login`, req.url)
     loginUrl.searchParams.set('callbackUrl', path)
     return NextResponse.redirect(loginUrl)

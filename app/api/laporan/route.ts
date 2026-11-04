@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { requireRole } from '@/lib/auth-guard'
+import { laporanSchema } from '@/lib/validators/laporan'
+import { readJson, RequestBodyError } from '@/lib/request-body'
 
 export async function POST(req: NextRequest) {
+  const guard = await requireRole('auth', req)
+  if (guard instanceof NextResponse) return guard
   try {
-    const body = await req.json()
+    const parsed = laporanSchema.safeParse(await readJson(req, 64 * 1024))
+    if (!parsed.success) return NextResponse.json({ error: 'Data laporan tidak valid' }, { status: 400 })
     const {
-      user_id = 1,
       tanggal, kecamatan, desa, blok_sensus,
       usaha_didatangi = 0, usaha_dicacah = 0, usaha_kosong = 0, usaha_tolak = 0,
       kategori = [], kendala = null, catatan = null, foto_urls = [],
       lat = null, lng = null,
-    } = body
+    } = parsed.data
+
+    if (guard.role === 'petugas') {
+      if (!guard.kdkec) return NextResponse.json({ error: 'Wilayah penugasan belum ditetapkan' }, { status: 403 })
+      const [wilayah] = await pool.execute('SELECT 1 FROM desa WHERE kdkec = ? AND nmkec = ? LIMIT 1', [guard.kdkec, kecamatan]) as [unknown[], unknown]
+      if (!wilayah.length) return NextResponse.json({ error: 'Laporan harus sesuai wilayah penugasan' }, { status: 403 })
+    }
 
     if (!tanggal || !kecamatan || !desa || !blok_sensus) {
       return NextResponse.json({ error: 'Field wajib: tanggal, kecamatan, desa, blok_sensus' }, { status: 400 })
@@ -23,7 +34,7 @@ export async function POST(req: NextRequest) {
          kategori, kendala, catatan, foto_urls, lat, lng)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        user_id, tanggal, kecamatan, desa, blok_sensus,
+        Number(guard.id), tanggal, kecamatan, desa, blok_sensus,
         usaha_didatangi, usaha_dicacah, usaha_kosong, usaha_tolak,
         JSON.stringify(kategori), kendala, catatan, JSON.stringify(foto_urls),
         lat, lng,
@@ -41,7 +52,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 201 })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    if (e instanceof RequestBodyError) return NextResponse.json({ error: e.message }, { status: e.status })
+    return NextResponse.json({ error: 'Gagal menyimpan laporan' }, { status: 500 })
   }
 }
 

@@ -19,7 +19,7 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ batchId: string }> },
 ) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], _req)
   if (guard instanceof NextResponse) return guard
 
   const { batchId } = await params

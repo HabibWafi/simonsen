@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], req)
   if (guard instanceof NextResponse) return guard
   const { id } = await params
   const body = await req.json().catch(() => null)

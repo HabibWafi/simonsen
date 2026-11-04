@@ -33,7 +33,7 @@ function regionCode(value: unknown) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ batchId: string }> }) {
-  const user = await requireRole(['admin'])
+  const user = await requireRole(['admin'], req)
   if (user instanceof NextResponse) return user
   const { batchId: rawBatchId } = await params
   const batchId = Number(rawBatchId)

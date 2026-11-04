@@ -6,7 +6,7 @@ const KATEGORI = ['berita', 'sosialisasi', 'infografis', 'video', 'pengumuman']
 
 /** Admin: update post (PUT). Body partial diperbolehkan. */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole(['admin', 'koordinator'])
+  const guard = await requireRole(['admin', 'koordinator'], req)
   if (guard instanceof NextResponse) return guard
   const { id } = await params
   try {
@@ -39,7 +39,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 /** Admin: hapus post. */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], _req)
   if (guard instanceof NextResponse) return guard
   const { id } = await params
   try {

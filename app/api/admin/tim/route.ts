@@ -18,7 +18,7 @@ export async function GET() {
 
 /** Admin: tambah anggota tim. */
 export async function POST(req: NextRequest) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], req)
   if (guard instanceof NextResponse) return guard
   try {
     const b = await req.json()

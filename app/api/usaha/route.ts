@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
   const params: any[] = []
 
   // Role-based scope: petugas hanya lihat kdkec-nya
-  if (guard.role === 'petugas' && guard.kdkec) {
+  if (guard.role === 'petugas') {
+    if (!guard.kdkec) return NextResponse.json({ error: 'Wilayah penugasan belum ditetapkan' }, { status: 403 })
     where.push('kdkec = ?')
     params.push(guard.kdkec)
   } else if (kdkec) {

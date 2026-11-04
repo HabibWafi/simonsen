@@ -46,8 +46,11 @@ cp .env.example .env.local
 ## 3. Build & Deploy
 
 ### Dev lokal
+Gunakan Node.js 24 minimal 24.22.1, sesuai `.nvmrc`, `.node-version`, dan `engines`.
+Versi CLI lokal bukan bukti bahwa proses hosting sudah memakai patch yang sama.
+
 ```bash
-npm install
+npm ci
 npm run dev
 # → http://localhost:3000
 ```
@@ -56,6 +59,8 @@ npm run dev
 ```bash
 # Set env, build, run
 export NEXT_PUBLIC_BASE_PATH=/se/2026
+npm ci
+npm run security:check
 npm run build
 npm run start
 # → http://localhost:3000/se/2026
@@ -189,7 +194,7 @@ hPanel → Advanced → Node.js:
 - **Application root**: folder tempat zip diekstrak.
 - **Application URL**: `https://sensus.bpskabmusirawas.com`.
 - **Application startup file**: `npm start`.
-- **Node.js version**: 20 atau 22.
+- **Node.js version**: 24, minimal 24.22.1. Pastikan versi efektif proses/worker, bukan hanya pilihan major pada panel.
 
 ### D. Environment Variables
 hPanel → Advanced → Node.js → **Environment Variables**, tambah
@@ -209,14 +214,14 @@ satu-per-satu dari file lokal `.env-production`:
 | `DB_NAME` | `uXXXXXXXX_se2026` |
 | `BOOTSTRAP_ADMIN_NIP` | `admin` |
 | `BOOTSTRAP_ADMIN_NAMA` | `Administrator` |
-| `BOOTSTRAP_ADMIN_PASSWORD` | (password admin awal yang kuat) |
+| `BOOTSTRAP_ADMIN_PASSWORD` | (wajib diisi; minimal 12 karakter, maksimal 72 byte UTF-8) |
 
 > ⚠️ `.env-production` **tidak ikut** di ZIP — secret-nya cukup di panel env
 > Hostinger. Jangan upload file `.env*` ke server.
 
 ### E. Install + Build + Start
 Dari panel Node.js:
-1. **Run NPM Install** → tunggu selesai (1–3 menit).
+1. Jalankan `npm ci` dari terminal application root agar versi sesuai lockfile; sertakan folder `vendor/` dalam upload.
 2. **Run NPM Script** → `build` → tunggu sampai muncul "Compiled
    successfully" + daftar route.
 3. **Start App**.
@@ -231,6 +236,10 @@ Script ini bikin database (kalau belum ada), apply semua migrasi
 (iterasi 4, 7, 9), seed (desa, dummy, posts, tim_se), dan bikin user
 admin awal. Idempotent — boleh dijalankan ulang.
 
+`BOOTSTRAP_ADMIN_PASSWORD` harus terisi sebelum menjalankan skrip. Akun yang
+sudah ada tidak diubah password atau role-nya oleh bootstrap. Gunakan fitur
+pengelolaan pengguna untuk perubahan akun; password tidak ditulis ke log.
+
 ### G. Test
 Buka `https://sensus.bpskabmusirawas.com/se/2026` — beranda muncul dengan
 navbar oren, peta choropleth, footer oren.
@@ -244,5 +253,20 @@ Saat ada perubahan code:
 1. `git add -A && git commit -m "..."` di lokal.
 2. `git archive --format=zip --output=se2026-deploy.zip HEAD`.
 3. Upload zip baru ke Hostinger, **Extract & Overwrite**.
-4. Run NPM Install (kalau `package.json` berubah) → Run script `build` →
+4. Jalankan `npm ci` dan `npm run security:check` → Run script `build` →
    Restart App.
+
+### Pemeriksaan keamanan sebelum rollout
+
+- Baca `security/security-review.md` untuk temuan, batas pengujian, dan hasil audit terbaru.
+- Pasang batas body, timeout, dan rate limit login pada reverse proxy hosting.
+  API import Excel membatasi file 20MB, arsip setelah ekstraksi 100MB/2048 entri;
+  upload gambar 8MB/24 juta piksel; API eksternal JSON 4MB.
+- Image Optimization dinonaktifkan sementara melalui `images.unoptimized`.
+  Gambar disajikan langsung; aktifkan kembali hanya setelah patch SVG optimizer
+  dari vendor diverifikasi dan endpoint diuji ulang. Pemilik: maintainer aplikasi.
+- Simpan artefak lama untuk investigasi/rollback, tetapi jangan mengaktifkan
+  kembali versi rentan. Jika perlu rollback kode, pertahankan dependensi patched
+  dan kontrol akses yang sudah diperbaiki.
+- Setelah rollout, ganti semua worker lama dan verifikasi `process.versions`,
+  versi Next/Auth.js/sharp, HTTPS, cookie, serta alur login/import dengan DB staging.

@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import pool from '@/lib/db'
 import { requireRole } from '@/lib/auth-guard'
+import { readExcelUpload } from '@/lib/excel/upload'
+import { RequestBodyError } from '@/lib/request-body'
 import { ingestFasih, type FasihPayload } from '@/lib/fasih/ingest'
 
 export const runtime = 'nodejs'
@@ -23,17 +25,12 @@ const SHEET_MAP: Record<string, keyof FasihPayload> = {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireRole(['admin', 'koordinator'])
+  const guard = await requireRole(['admin', 'koordinator'], req)
   if (guard instanceof NextResponse) return guard
 
   try {
-    const form = await req.formData()
-    const file = form.get('file')
-    if (!file || typeof file === 'string') {
-      return NextResponse.json({ error: 'File .xlsx tidak ditemukan' }, { status: 400 })
-    }
-    const buf = Buffer.from(await (file as File).arrayBuffer())
-    const wb = XLSX.read(buf, { type: 'buffer' })
+    const { file, buffer } = await readExcelUpload(req)
+    const wb = XLSX.read(buffer, { type: 'buffer' })
 
     const payload: FasihPayload = {
       snapshot_ts: extractTs((file as File).name),
@@ -57,7 +54,7 @@ export async function POST(req: NextRequest) {
     const result = await ingestFasih(pool, payload, { source: 'excel', token_id: null })
     return NextResponse.json({ ok: true, ...result })
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Import gagal' }, { status: 500 })
+    return NextResponse.json({ error: e instanceof RequestBodyError ? e.message : 'Import gagal' }, { status: e instanceof RequestBodyError ? e.status : 500 })
   }
 }
 
