@@ -56,6 +56,11 @@ npm run dev
 ```
 
 ### Build production
+Hostinger dapat memasang hanya dependency produksi saat `NODE_ENV=production`.
+Paket deklarasi tipe yang diperlukan oleh `next build`, termasuk `@types/yauzl`,
+harus tersedia di `dependencies`. Untuk memeriksa kondisi ini, jalankan
+`npm ci --omit=dev` lalu `npm run build`.
+
 ```bash
 # Set env, build, run
 export NEXT_PUBLIC_BASE_PATH=/se/2026
