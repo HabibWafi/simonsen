@@ -61,6 +61,11 @@ Paket deklarasi tipe yang diperlukan oleh `next build`, termasuk `@types/yauzl`,
 harus tersedia di `dependencies`. Untuk memeriksa kondisi ini, jalankan
 `npm ci --omit=dev` lalu `npm run build`.
 
+Build dibatasi ke satu worker melalui `experimental.cpus: 1` di `next.config.ts`.
+Ini menghindari pembuatan puluhan worker ketika hosting memperlihatkan jumlah CPU
+host yang lebih besar dari kuota proses/thread container. Build dapat lebih lama;
+pengaturan ini membatasi worker build, bukan jumlah CPU server aplikasi saat berjalan.
+
 ```bash
 # Set env, build, run
 export NEXT_PUBLIC_BASE_PATH=/se/2026
