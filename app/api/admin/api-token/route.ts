@@ -30,7 +30,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], req)
   if (guard instanceof NextResponse) return guard
 
   let body: any

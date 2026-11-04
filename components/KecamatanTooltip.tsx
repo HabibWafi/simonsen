@@ -7,6 +7,10 @@
  */
 import type { ProgressBreakdown, SkalaUsaha } from '@/types'
 
+function escapeHtml(value: string): string {
+  return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!)
+}
+
 export interface FasihInfo {
   open: number; draft: number; submitted: number
   approved: number; rejected: number; revoked?: number; edited_pengawas?: number
@@ -34,6 +38,7 @@ const SKALA_LABEL: Record<SkalaUsaha, string> = {
 export function buildKecamatanTooltipHtml({
   nama, target, realisasi, persentase, breakdown, fasih, skalaFilter = '',
 }: Omit<Props, 'compact'>): string {
+  nama = escapeHtml(nama)
   const skalaLabel = skalaFilter ? ` <span style="font-weight:500;opacity:.7;font-size:10px">[${skalaFilter}]</span>` : ''
   let body = `<div style="font-size:12px;line-height:1.55">
     Target: <b>${target.toLocaleString('id-ID')}</b> assignment${skalaLabel}<br>

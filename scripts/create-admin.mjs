@@ -8,6 +8,7 @@
  */
 import mysql from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
+import { bootstrapPassword } from './bootstrap-password.mjs'
 import { readFileSync } from 'node:fs'
 
 // Load .env.local manual (Node tidak auto-load)
@@ -21,7 +22,7 @@ try {
 
 const nip      = process.env.BOOTSTRAP_ADMIN_NIP      ?? 'admin'
 const nama     = process.env.BOOTSTRAP_ADMIN_NAMA     ?? 'Administrator'
-const password = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? 'admin123'
+const password = bootstrapPassword()
 
 const pool = mysql.createPool({
   host:     process.env.DB_HOST ?? 'localhost',
@@ -36,7 +37,7 @@ const hashed = await bcrypt.hash(password, 10)
 try {
   const [result] = await pool.execute(
     `INSERT INTO users (nip, nama, role, password) VALUES (?, ?, 'admin', ?)
-     ON DUPLICATE KEY UPDATE nama = VALUES(nama), role = VALUES(role), password = VALUES(password)`,
+     ON DUPLICATE KEY UPDATE nip = VALUES(nip)`,
     [nip, nama, hashed],
   )
   console.log(`✓ Admin bootstrapped: nip=${nip} (password tidak ditampilkan)`)

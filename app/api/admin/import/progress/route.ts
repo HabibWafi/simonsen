@@ -2,20 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { requireRole } from '@/lib/auth-guard'
 import { parseProgressBuffer } from '@/lib/excel/parseProgress'
+import { readExcelUpload } from '@/lib/excel/upload'
+import { RequestBodyError } from '@/lib/request-body'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
-  const guard = await requireRole(['admin', 'koordinator'])
+  const guard = await requireRole(['admin', 'koordinator'], req)
   if (guard instanceof NextResponse) return guard
 
-  const formData = await req.formData()
-  const file = formData.get('file') as File | null
-  if (!file) return NextResponse.json({ error: 'File tidak ditemukan' }, { status: 400 })
-
-  const buffer = Buffer.from(await file.arrayBuffer())
-  const parsed = parseProgressBuffer(buffer)
+  let file: File
+  let parsed: ReturnType<typeof parseProgressBuffer>
+  try {
+    const upload = await readExcelUpload(req)
+    file = upload.file
+    parsed = parseProgressBuffer(upload.buffer)
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof RequestBodyError ? error.message : 'File Excel tidak valid' }, { status: error instanceof RequestBodyError ? error.status : 400 })
+  }
 
   if (parsed.missingColumns.length) {
     return NextResponse.json({

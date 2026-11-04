@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/auth-guard'
 import { aksesSchema } from '@/lib/validators/tahapan'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string; aksesId: string }> }) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], req)
   if (guard instanceof NextResponse) return guard
   const { aksesId } = await params
   const body = await req.json().catch(() => null)
@@ -24,7 +24,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; aksesId: string }> }) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], _req)
   if (guard instanceof NextResponse) return guard
   const { aksesId } = await params
   await pool.execute('DELETE FROM tahapan_akses WHERE id = ?', [Number(aksesId)])

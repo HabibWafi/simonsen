@@ -1,5 +1,7 @@
 'use client'
 
+import { csvEscape } from './csv'
+
 /**
  * Util export client-side TANPA dependency eksternal.
  * - exportCsv: unduh CSV dari data array.
@@ -14,11 +16,6 @@ function triggerDownload(href: string, filename: string) {
   document.body.appendChild(a)
   a.click()
   a.remove()
-}
-
-const csvEscape = (v: any) => {
-  const s = v == null ? '' : String(v)
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
 export function exportCsv(filename: string, headers: string[], rows: (string | number)[][]) {

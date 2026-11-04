@@ -5,7 +5,7 @@ import { requireRole } from '@/lib/auth-guard'
 import { userUpdateSchema } from '@/lib/validators/user'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], req)
   if (guard instanceof NextResponse) return guard
   const { id } = await params
   const idNum = Number(id)
@@ -34,7 +34,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], _req)
   if (guard instanceof NextResponse) return guard
   const { id } = await params
   const idNum = Number(id)

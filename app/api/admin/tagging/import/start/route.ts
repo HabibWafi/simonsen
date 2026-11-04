@@ -5,7 +5,7 @@ import { requireRole } from '@/lib/auth-guard'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  const user = await requireRole(['admin'])
+  const user = await requireRole(['admin'], req)
   if (user instanceof NextResponse) return user
 
   const body = await req.json().catch(() => null) as Record<string, unknown> | null

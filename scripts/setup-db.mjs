@@ -11,6 +11,7 @@
  */
 import mysql from 'mysql2/promise'
 import bcrypt from 'bcryptjs'
+import { bootstrapPassword } from './bootstrap-password.mjs'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -31,7 +32,7 @@ const DB_NAME = process.env.DB_NAME ?? 'se2026_bps'
 
 const ADMIN_NIP  = process.env.BOOTSTRAP_ADMIN_NIP  ?? 'admin'
 const ADMIN_NAMA = process.env.BOOTSTRAP_ADMIN_NAMA ?? 'Administrator'
-const ADMIN_PASS = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? 'admin123'
+const ADMIN_PASS = bootstrapPassword()
 
 function color(c, s) {
   const codes = { green: 32, red: 31, yellow: 33, cyan: 36, dim: 2, bold: 1 }
@@ -197,10 +198,10 @@ async function main() {
   const hashed = await bcrypt.hash(ADMIN_PASS, 10)
   await root.execute(
     `INSERT INTO users (nip, nama, role, password) VALUES (?, ?, 'admin', ?)
-     ON DUPLICATE KEY UPDATE nama = VALUES(nama), role = VALUES(role), password = VALUES(password)`,
+     ON DUPLICATE KEY UPDATE nip = VALUES(nip)`,
     [ADMIN_NIP, ADMIN_NAMA, hashed],
   )
-  ok(`Admin: nip=${ADMIN_NIP} password=${ADMIN_PASS}`)
+  ok(`Admin ready: nip=${ADMIN_NIP} (password tidak ditampilkan; akun existing tidak diubah)`)
 
   // 5. Seed dummy
   info('Apply dummy data…')
@@ -248,7 +249,7 @@ async function main() {
   })
   console.log(color('bold', '════════════════════════════════════════'))
   console.log()
-  ok(`Setup complete. Login: ${color('bold', `nip=${ADMIN_NIP} password=${ADMIN_PASS}`)}`)
+  ok(`Setup complete. Login: nip=${ADMIN_NIP} (gunakan password yang telah dikonfigurasi)`)
 
   await root.end()
 }

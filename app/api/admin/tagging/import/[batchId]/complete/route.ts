@@ -7,7 +7,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 export async function POST(_req: Request, { params }: { params: Promise<{ batchId: string }> }) {
-  const user = await requireRole(['admin'])
+  const user = await requireRole(['admin'], _req)
   if (user instanceof NextResponse) return user
   const { batchId: rawBatchId } = await params
   const batchId = Number(rawBatchId)

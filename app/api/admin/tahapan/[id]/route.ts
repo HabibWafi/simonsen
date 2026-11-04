@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/auth-guard'
 import { tahapanSchema } from '@/lib/validators/tahapan'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], req)
   if (guard instanceof NextResponse) return guard
 
   const { id } = await params
@@ -31,7 +31,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireRole(['admin'])
+  const guard = await requireRole(['admin'], _req)
   if (guard instanceof NextResponse) return guard
   const { id } = await params
   await pool.execute('DELETE FROM tahapan WHERE id = ?', [Number(id)])

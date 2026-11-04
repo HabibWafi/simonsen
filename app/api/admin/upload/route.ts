@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 import { requireRole } from '@/lib/auth-guard'
+import { readFormData, RequestBodyError } from '@/lib/request-body'
 
 export const runtime = 'nodejs'
 
@@ -17,11 +18,11 @@ const FOLDERS = ['posts', 'tim'] as const
  * Return { url }.
  */
 export async function POST(req: NextRequest) {
-  const guard = await requireRole(['admin', 'koordinator'])
+  const guard = await requireRole(['admin', 'koordinator'], req)
   if (guard instanceof NextResponse) return guard
 
   try {
-    const form = await req.formData()
+    const form = await readFormData(req, MAX_BYTES + 64 * 1024)
     const file = form.get('file')
     const folderRaw = String(form.get('folder') ?? 'posts')
     const folder = (FOLDERS as readonly string[]).includes(folderRaw) ? folderRaw : 'posts'
@@ -38,7 +39,18 @@ export async function POST(req: NextRequest) {
     }
 
     const buf = Buffer.from(await blob.arrayBuffer())
-    const webp = await sharp(buf)
+    const jpeg = buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff
+    const png = buf.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    const webpSignature = buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP'
+    if (!jpeg && !png && !webpSignature) {
+      return NextResponse.json({ error: 'Isi file harus berupa JPG/PNG/WebP' }, { status: 400 })
+    }
+    const image = sharp(buf, { limitInputPixels: 24_000_000, failOn: 'warning' })
+    const metadata = await image.metadata()
+    if (!metadata.format || !['jpeg', 'png', 'webp'].includes(metadata.format) || (metadata.pages ?? 1) > 1) {
+      return NextResponse.json({ error: 'Isi file harus berupa JPG/PNG/WebP statis' }, { status: 400 })
+    }
+    const webp = await image
       .rotate()
       .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 80 })
@@ -51,6 +63,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: `/uploads/${folder}/${filename}`, size: webp.length })
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Upload gagal' }, { status: 500 })
+    if (e instanceof RequestBodyError) return NextResponse.json({ error: e.message }, { status: e.status })
+    return NextResponse.json({ error: 'Upload gagal; periksa format dan dimensi gambar' }, { status: 400 })
   }
 }

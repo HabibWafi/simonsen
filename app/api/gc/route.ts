@@ -25,7 +25,7 @@ export async function GET() {
     return NextResponse.json(data, {
       headers: { 'X-Cache': 'MISS', 'Cache-Control': 'public, max-age=300' },
     })
-  } catch (e: any) {
-    return NextResponse.json({ error: 'GC API unavailable', message: e.message }, { status: 502 })
+  } catch {
+    return NextResponse.json({ error: 'GC API unavailable' }, { status: 502 })
   }
 }

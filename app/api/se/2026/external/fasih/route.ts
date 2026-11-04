@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { readJson, RequestBodyError } from '@/lib/request-body'
 import { requireApiToken, checkRateLimit, logAudit } from '@/lib/api-guard'
 import { ingestFasih, type FasihPayload } from '@/lib/fasih/ingest'
 
@@ -30,7 +31,8 @@ export async function POST(req: NextRequest) {
   }
 
   let body: FasihPayload
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
+  try { body = await readJson(req) as FasihPayload } catch (error) { return NextResponse.json({ error: 'Invalid JSON atau body melewati batas' }, { status: error instanceof RequestBodyError ? error.status : 400 }) }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Body harus berupa objek' }, { status: 400 })
 
   const levels = ['kecamatan', 'desa', 'sls', 'subsls', 'petugas', 'pengawas'] as const
   const totalRows = levels.reduce((a, l) => a + (Array.isArray((body as any)[l]) ? (body as any)[l].length : 0), 0)

@@ -16,9 +16,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const nip = credentials?.nip as string | undefined
-        const password = credentials?.password as string | undefined
-        if (!nip || !password) return null
+        const nip = credentials?.nip
+        const password = credentials?.password
+        if (typeof nip !== 'string' || typeof password !== 'string'
+            || !nip || nip.length > 30 || !password || Buffer.byteLength(password, 'utf8') > 72) return null
 
         try {
           const [rows] = await pool.execute(
