@@ -4,8 +4,8 @@ Tanggal/zona waktu: 4 November 2026, Asia/Jakarta.
 Mode: existing; pemeriksaan dan perbaikan lokal repository `simonsen`.
 Baseline: commit `4acc7d976634e3c7cc12704942b9cc242d21ddb8`, working tree bersih sebelum audit.
 Artefak yang dinilai: perubahan working tree setelah baseline tersebut dan lockfile hasil pembaruan.
-SHA-256 lockfile akhir: `f10bed2b424ee858926d69d4dfcae92b2e9704a4173f8ee25cadd467c030282c`.
-Build standalone lokal akhir: `NFevQ45RtLtRJVeZsEbBw`; smoke 9/9 lulus setelah instalasi bersih dan build akhir.
+SHA-256 lockfile audit awal: `f10bed2b424ee858926d69d4dfcae92b2e9704a4173f8ee25cadd467c030282c`.
+Build standalone audit awal: `NFevQ45RtLtRJVeZsEbBw`; smoke 9/9 lulus setelah instalasi bersih dan build audit awal.
 Status pengembangan lokal: **READY_FOR_DEVELOPMENT**.
 Status rilis produksi: **NEEDS_EVIDENCE**; belum ada rollout atau pemeriksaan proses produksi.
 
@@ -100,3 +100,11 @@ Sebelum release, penanggung jawab aplikasi/hosting perlu:
 6. Mempertahankan artefak baseline untuk referensi pemulihan; jangan mengaktifkan ulang versi rentan saat rollback. Rollback kode harus tetap membawa patch dependency dan kontrol otorisasi. Tidak ada migrasi skema dalam perubahan ini.
 
 Pemeriksaan ini tidak membaca log/host produksi, tidak menilai indikasi kompromi aktual, tidak mengaudit semua isi data/database, dan tidak menyatakan semua ancaman dicegah. Pengembangan lokal dapat dilanjutkan. Clearance produksi menunggu bukti proses deployment dan pengujian DB nyata; hasil audit npm bersih hanya berlaku untuk dependency produksi yang diketahui registry pada tanggal ini.
+
+## Tindak lanjut build Hostinger
+
+Log build `01a1a77b-03fc-708b-851a-4a09544f499d` dari pengguna menunjukkan commit `a8fd7aa` berhasil dikompilasi, tetapi gagal type-check karena `@types/yauzl` tidak terpasang. Pemeriksaan audit awal memasang dependency development sehingga kondisi instalasi produksi yang menghilangkan paket tipe ini belum tercakup.
+
+`@types/yauzl` dipindahkan dari `devDependencies` ke `dependencies`, dan flag `dev` pada entri lockfile dihapus. Versi paket dan validasi tipe aplikasi dipertahankan. Dokumentasi deployment menambahkan pemeriksaan instalasi tanpa paket development.
+
+Verifikasi lokal setelah perbaikan: `npm prune --omit=dev --ignore-scripts --no-audit` menghapus seluruh tool lint development; `@types/yauzl@3.4.0`, `yauzl@3.4.0`, dan TypeScript tetap terpasang. `next build --webpack` **lulus sampai selesai**, termasuk type-check dan pembuatan standalone, dalam kondisi ini. Seluruh **16 tes keamanan lulus** dan `npm audit --omit=dev` melaporkan **0 kerentanan**. SHA-256 lockfile perbaikan: `3d74671f473ec1aa3e538ebc6faf46020ba7d7b55efeb1e29f4fe5bd7ea515e0`. Keberhasilan redeploy Hostinger berikutnya masih perlu diverifikasi dari log hosting.
