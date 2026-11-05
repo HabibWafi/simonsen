@@ -45,6 +45,30 @@ cp .env.example .env.local
 
 ## 3. Build & Deploy
 
+### Rilis monitoring PES SE2026
+
+1. Terapkan `db/migrations/2026_se2026_pes.sql` pada database aplikasi **sebelum**
+   merge/rilis kode. SQL hanya menambahkan `pes_snapshot`, `pes_petugas`, dan
+   `pes_petugas_harian` dengan `CREATE TABLE IF NOT EXISTS`; dapat dijalankan ulang.
+   Tidak mengubah tabel Fasih maupun data SE2026 utama.
+2. Dari checkout dengan konfigurasi DB aplikasi yang benar, jalankan
+   `npm run db:migrate-pes`. Skrip membaca konfigurasi DB yang sudah tersedia;
+   jangan menaruh kredensial di source atau argumen CLI. Alternatif hPanel:
+   phpMyAdmin database situs → SQL → jalankan isi file migrasi tersebut.
+3. Pastikan tiga tabel tersedia, jalankan `npm run security:check`,
+   `npm run test:schedule`, tes MySQL disposable, dan `npm run build`.
+   Push branch, buka PR, lalu merge ke `main` untuk auto deploy Hostinger.
+4. Verifikasi `/se/2026/pes` dan `/api/se/2026/public/pes`. Sebelum scraper
+   terhubung, kondisi menunggu data adalah hasil yang diharapkan. Jika tabel belum
+   siap, API mengembalikan 503 dan halaman menampilkan status belum tersedia.
+5. Saat scraper siap, admin membuat token SE2026 khusus `write:pes` melalui
+   dashboard API. Token progress lama tidak otomatis diperluas. Hubungkan scraper
+   menurut [kontrak PES](docs/api/pes-2026.md); tahap ini tidak membuat scraper
+   atau menyimpan token produksi baru.
+
+Rollback kode dapat memakai commit sebelum rilis; biarkan tabel PES tetap ada agar
+snapshot tidak hilang. Jangan menjatuhkan tabel sebagai bagian rollback rutin.
+
 ### Dev lokal
 Gunakan Node.js 24 minimal 24.22.1, sesuai `.nvmrc`, `.node-version`, dan `engines`.
 Versi CLI lokal bukan bukti bahwa proses hosting sudah memakai patch yang sama.

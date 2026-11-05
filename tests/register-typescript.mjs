@@ -16,7 +16,7 @@ registerHooks({
       for (const candidate of [file, `${file}.ts`, `${file}.tsx`]) {
         if (!existsSync(candidate)) continue
         if (candidate === resolve(root, 'lib/auth.ts')) return { url: stub('export async function auth() { return globalThis.securityTest.session }'), shortCircuit: true }
-        if (candidate === resolve(root, 'lib/db.ts')) return { url: stub('export default { execute: (...args) => globalThis.securityTest.execute(...args), query: (...args) => globalThis.securityTest.execute(...args) }'), shortCircuit: true }
+        if (candidate === resolve(root, 'lib/db.ts')) return { url: stub('export default { execute: (...args) => globalThis.securityTest.execute(...args), query: (...args) => globalThis.securityTest.execute(...args), getConnection: (...args) => globalThis.securityTest.getConnection(...args) }'), shortCircuit: true }
         return next(pathToFileURL(candidate).href, context)
       }
     }

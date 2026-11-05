@@ -13,9 +13,12 @@
     "vendor:eslint": "node scripts/vendor-eslint-plugins.mjs",
     "test:security": "node --test --import ./tests/register-typescript.mjs tests/security.test.mjs",
     "test:schedule": "node --test --import ./tests/register-typescript.mjs tests/schedule.test.mjs",
+    "test:pes": "node --test --import ./tests/register-typescript.mjs tests/pes.test.mjs",
+    "test:pes:mysql": "node --test --import ./tests/register-typescript.mjs tests/pes.mysql.test.mjs",
     "test:lint-toolchain": "node --test tests/lint-toolchain.test.mjs",
     "test:security:smoke": "node tests/security-smoke.mjs",
-    "security:check": "npm run test:security && npm run test:lint-toolchain && npm audit --include=dev",
+    "security:check": "npm run test:security && npm run test:pes && npm run test:lint-toolchain && npm audit --include=dev",
+    "db:migrate-pes": "node scripts/migrate-pes.mjs",
     "db:migrate-tagging": "node scripts/migrate-iterasi23.mjs",
     "db:import-tagging": "node scripts/import-tagging.mjs"
   },
