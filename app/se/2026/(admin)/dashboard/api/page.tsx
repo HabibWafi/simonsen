@@ -15,6 +15,7 @@ interface Token {
 }
 
 const SCOPES = [
+  { id: 'write:pes',      label: 'Tulis/update monitoring PES' },
   { id: 'read:progress',  label: 'Baca progress' },
   { id: 'write:progress', label: 'Tulis/update progress' },
   { id: 'read:usaha',     label: 'Baca daftar usaha' },

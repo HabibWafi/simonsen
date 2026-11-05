@@ -4,6 +4,7 @@
  * Layout per-sensus pakai ini untuk render NavbarSensus/FooterSensus.
  */
 import pool from './db'
+import { withPesNavigation } from './pes/navigation'
 import type { SensusConfig, NavbarConfig, FooterConfig } from '@/types'
 
 // ---------- Default fallback (kalau DB belum di-migrate) ----------
@@ -110,15 +111,16 @@ export async function getSensusConfig(kode: string, tahun: number): Promise<Sens
         footer_config: typeof r.footer_config === 'string' ? JSON.parse(r.footer_config) as FooterConfig : r.footer_config,
         is_active: !!r.is_active,
       }
-      cache.set(key, { data, expiresAt: now + CACHE_TTL_MS })
-      return data
+      const resolved = withPesNavigation(data)
+      cache.set(key, { data: resolved, expiresAt: now + CACHE_TTL_MS })
+      return resolved
     }
   } catch (e: any) {
     console.warn(`[sensusConfig] DB fetch gagal untuk ${kode}/${tahun}:`, e?.message)
   }
 
   // Fallback
-  if (kode === 'se' && tahun === 2026) return SE2026_FALLBACK
+  if (kode === 'se' && tahun === 2026) return withPesNavigation(SE2026_FALLBACK)
   throw new Error(`Sensus config tidak ditemukan: ${kode}/${tahun}`)
 }
 

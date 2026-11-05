@@ -229,6 +229,7 @@ export interface ImportBatchRow {
 
 // ---------- API Token (external) ----------
 export type ApiScope =
+  | 'write:pes'
   | 'read:progress' | 'write:progress'
   | 'read:usaha'    | 'write:usaha'
   | 'read:tahapan'  | 'write:tahapan'

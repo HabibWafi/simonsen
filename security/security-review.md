@@ -170,3 +170,77 @@ Mode: existing; baseline `3a8d37f464b7f3023a58c279bc5d19b8cf5f77e1`. Pengguna me
 - `git diff --check`: **lulus**. Tidak dilakukan payload eksploit, scanning produksi, migrasi DB, atau rotasi secret.
 
 Pemeliharaan berikutnya harus menguji plugin lokal ini saat versi lint berubah; hapus arsip dan adapter ketika rilis upstream sudah mendukungnya dan tes kompatibilitas tetap lulus. Deployment otomatis mengikuti otorisasi GitHub/main sebelumnya. Status proses aktif serta hasil scanner Hostinger tetap **NEEDS_EVIDENCE** sampai bukti hosting tersedia; source yang diperbarui tidak membuktikan semua worker telah berganti.
+
+## Monitoring PES SE2026 — 5 November 2026
+
+Mode: existing, pemeriksaan terfokus pada integrasi baru PES; baseline main
+`db68e47eb84fa5616fc8073e4211acd7f5de58a9`. Panduan Next.js yang terpasang
+untuk Route Handlers, Client Components dan lazy loading dibaca sebelum implementasi.
+Tidak ada perubahan dependency/runtime atau pengambilan data responden.
+
+### Perlindungan dan kontrak data
+
+- Endpoint POST memakai token SE2026 dengan scope `write:pes`, guard/audit dan
+  limiter yang sudah ada. `write:progress` saja ditolak; scope `admin` tetap
+  mengikuti aturan guard. Limiter berada dalam memori per proses, bukan global.
+- Body aktual dibatasi 4 MiB, kompresi ditolak, Content-Type JSON wajib, batch
+  dibatasi 6.000 kunci unik. Zod memvalidasi integer nonnegatif, batas terhadap
+  assignment, urutan selesai pemeriksaan/pendataan, nama publik bukan email,
+  serta waktu sumber tidak lebih dari lima menit di masa depan.
+- SQL berparameter dan row lock dalam urutan kunci stabil menjaga transaksi
+  metadata–rekap–riwayat. Hash payload mencegah replay; stale/conflict membatalkan
+  semua baris. Pengalihan assignment dikirim sebagai kondisi absolut kedua petugas.
+- UUID publik berbeda dari kunci sumber. SELECT publik menyebut kolom secara
+  eksplisit; email/kunci sumber, hash, token dan informasi responden tidak dikirim.
+  Error database hanya mengembalikan status belum tersedia, tanpa SQL mentah.
+- Identitas, target dinamis dan riwayat harian WIB berada di tabel `pes_*` terpisah.
+  Koreksi negatif dipertahankan; hari tanpa snapshot dan baseline tidak dihitung
+  sebagai tambahan harian. Filter roster terkini konsisten di rekap dan riwayat.
+- CSV memakai helper perlindungan formula yang sudah diuji; React melakukan
+  escaping nama. Grafik dimuat terpisah dan polling hanya berjalan saat tab aktif,
+  setiap 60 detik serta ketika kembali ke tab. Keadaan kosong/gagal tidak membuat
+  angka contoh atau mengambil angka SE2026 utama.
+
+### Pemeriksaan yang dijalankan
+
+- `npm run security:check`: **43/43 tes lulus** (16 keamanan, 11 PES, 16
+  toolchain); `npm audit --include=dev`: **0 kerentanan**.
+- `npm run test:schedule`: **6/6 lulus**.
+- `npm run test:pes:mysql`: **7/7 lulus** pada MySQL 8.4 disposable di loopback;
+  mencakup migration dua kali, concurrent replay, pertumbuhan target, nol target,
+  nama sama/ID berbeda, partial update, reassignment/koreksi, histori dan rollback
+  stale row setelah baris lain sudah diubah. Tes memakai sentinel SE2026 yang tetap
+  sama dan memeriksa tidak bocornya identitas sumber lewat API publik.
+- Lint file PES baru/berubah: **0 diagnostik**. Build produksi menyelesaikan
+  kompilasi, TypeScript, 67 halaman dengan satu worker, serta standalone.
+- UI build produksi lokal: pencarian, filter pengawas/petugas, urutan target,
+  ringkasan dan kedua mode grafik diperiksa dengan data sintetis. Validasi rentang
+  di atas 90 hari ditolak. Layout 390 px tidak menambah overflow halaman; tabel
+  menggunakan area scroll sendiri dan menu ponsel memuat PES setelah Progress.
+- Kondisi kosong diuji dengan mengosongkan DB disposable; kondisi unavailable
+  diuji dengan rename sementara tabel disposable lalu dipulihkan. UI menampilkan
+  placeholder dan pesan yang sesuai. Tidak ada pengujian kegagalan di produksi.
+- CSV hasil filter diperiksa: hanya petugas terpilih, angka sama dengan rekap.
+  Pemeriksaan ekspor menemukan selector ikon legenda Recharts; selector PNG grafik
+  diperbaiki menjadi SVG dengan role application agar mengambil plot utama.
+  Sesudah rebuild, rentang 1–5 November diterapkan melalui UI; PNG kumulatif dan
+  harian yang dihasilkan masing-masing berukuran **2334 × 620**, bukan ikon 28 × 28.
+  CSV dan PNG tabel juga menghasilkan isi sesuai rekap. Browser lokal menyisakan
+  unduhan pada file sementara `.crdownload`; yang diperiksa adalah isi/metadata
+  hasil generasi, bukan klaim bahwa pengguna sudah menyelesaikan penyimpanan OS.
+
+### Migrasi dan batas rilis
+
+Migrasi additive `2026_se2026_pes.sql` diterapkan lewat sesi phpMyAdmin hPanel yang
+sudah terautentikasi, pada database situs sebelum merge. Ketiga CREATE berhasil;
+struktur menunjukkan `pes_snapshot`, `pes_petugas`, `pes_petugas_harian` masing-masing
+0 baris. Tabel lain, token dan konfigurasi akses tidak diubah. Tidak ada data
+sintetis yang dikirim ke produksi. `npm run db:migrate-pes` menyediakan penerapan
+ulang idempotent dan kontrak scraper ada di `docs/api/pes-2026.md`.
+
+Keputusan cakupan fitur: **READY_FOR_RELEASE** setelah build/check di atas.
+Scraper belum dibuat/dihubungkan dan token produksi baru belum diterbitkan; data
+nyata baru tersedia setelah integrasi itu dilakukan. Ketahanan lintas-replika
+limiter, seluruh runtime hosting, serta pengiriman sumber nyata tetap di luar
+bukti tes lokal ini. Hasil deploy dan akses halaman produksi harus diverifikasi
+sesudah merge; audit npm bersih bukan bukti seluruh server bebas kerentanan.
