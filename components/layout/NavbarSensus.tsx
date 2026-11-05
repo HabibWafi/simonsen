@@ -29,6 +29,7 @@ export default function NavbarSensus({ config }: Props) {
 
   const primary = config.primary_color
   const secondary = config.secondary_color ?? primary
+  const mobileBreakpoint = config.sensus_kode === 'se' && config.tahun === 2026 ? 1100 : 900
   const { navLinks, wordmarkAtas, wordmarkBawah, ctaLabel, ctaHref } = config.navbar_config
 
   const isActive = (href: string) => {
@@ -181,7 +182,7 @@ export default function NavbarSensus({ config }: Props) {
       <style>{`
         .nav-link-s:hover { color: ${primary} !important; }
         .btn-login-s:hover { background: ${secondary} !important; transform: translateY(-1px); }
-        @media (max-width: 900px) {
+        @media (max-width: ${mobileBreakpoint}px) {
           .nav-desktop-s { display: none !important; }
           .btn-hamburger-s { display: flex !important; }
           .btn-login-s { display: none !important; }
