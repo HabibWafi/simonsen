@@ -244,3 +244,18 @@ nyata baru tersedia setelah integrasi itu dilakukan. Ketahanan lintas-replika
 limiter, seluruh runtime hosting, serta pengiriman sumber nyata tetap di luar
 bukti tes lokal ini. Hasil deploy dan akses halaman produksi harus diverifikasi
 sesudah merge; audit npm bersih bukan bukti seluruh server bebas kerentanan.
+
+### Verifikasi produksi dan navigasi tablet
+
+PR #7 digabung sebagai `78f818dd457dc26b2f5c93bd57368dc4fc43fffb` dan auto
+deploy Hostinger teramati. Pada 5 November 2026, halaman PES dan API publik
+mengembalikan **200**, roster kosong, source null, dan header `no-store` pada API.
+Rentang lebih dari 90 hari ditolak **400**; POST tanpa token ditolak **401**.
+Halaman produksi menampilkan menunggu snapshot pertama dengan placeholder,
+serta menu PES di navbar/footer. Tidak dilakukan penulisan snapshot produksi.
+
+Pemeriksaan tambahan pada lebar 940 px menemukan navbar desktop melampaui layar
+(scroll width 1005 px pada client width 925 px). Breakpoint navbar khusus SE2026
+dinaikkan dari 900 ke 1100 px sehingga menu ponsel dipakai sebelum tujuh tautan
+dan tombol login kehabisan ruang. Sensus lain tetap memakai breakpoint lama.
+Perubahan ini hanya CSS responsif; lint komponen dan build produksi dijalankan ulang.
