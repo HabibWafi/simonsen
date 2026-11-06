@@ -2,6 +2,7 @@ import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { NextRequest } from 'next/server'
 import { pesPayloadSchema, pesRange, buildPesHistory, percent, dateWib } from '../lib/pes/domain.ts'
+import { groupPesBySupervisor, submittedPes } from '../lib/pes/progress.ts'
 import { withPesNavigation } from '../lib/pes/navigation.ts'
 import { POST } from '../app/api/se/2026/external/pes/route.ts'
 import { GET } from '../app/api/se/2026/public/pes/route.ts'
@@ -34,6 +35,23 @@ test('PES uses current target and handles zero target without NaN', () => {
   assert.equal(percent(6, 10), 60)
   assert.equal(percent(6, 20), 30)
   assert.equal(percent(0, 0), 0)
+})
+
+test('PES supervisor progress sums current team statuses and uses the combined target', () => {
+  const { petugas } = pesPayloadSchema.parse(body({ petugas: [
+    row({ total: 10, submitted_pencacah: 2, submitted_responden: 1, edited_pengawas: 1 }),
+    row({ pencacah: 'second', total: 30, submitted_pencacah: 6, selesai_cacah: 7, selesai_approve: 1 }),
+    row({ pencacah: 'unassigned', nama_pml: '', total: 0, selesai_cacah: 0, selesai_approve: 0 }),
+  ] }))
+  const [team, unassigned] = groupPesBySupervisor(petugas)
+  assert.equal(team.jumlah_pencacah, 2)
+  assert.equal(team.total, 40)
+  assert.equal(submittedPes(team), 9)
+  assert.equal(team.selesai_approve, 5)
+  assert.equal(team.pct_approve, 12.5)
+  assert.equal('edited_pengawas' in team, false)
+  assert.equal(unassigned.nama_pml, 'Belum ditetapkan')
+  assert.equal(unassigned.pct_approve, 0)
 })
 
 test('source timestamps and calendar boundaries follow Asia/Jakarta', () => {
